@@ -17,33 +17,14 @@ const CSV_PPUROPA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5
 const CSV_NOTICE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1640060087&single=true&output=csv";
 // ==========================================
 
-// 💡 넥슨 공식 등급 번호 전체 완벽 매핑 (2800 = 세미프로 2부 등 전체 포함!)
 const DIVISIONS: Record<number, string> = {
-  800: "슈퍼 챔피언스", 
-  900: "챔피언스", 
-  1000: "슈퍼 챌린지", 
-  1100: "챌린지 1부", 
-  1200: "챌린지 2부", 
-  1300: "챌린지 3부",
-  2000: "월드클래스 1부", 
-  2100: "월드클래스 2부", 
-  2200: "월드클래스 3부", 
-  2300: "월드클래스 3부",
-  2400: "프로 1부", 
-  2500: "프로 2부", 
-  2600: "프로 3부",
-  2700: "세미프로 1부", 
-  2800: "세미프로 2부", 
-  2900: "세미프로 3부",
-  3000: "유망주 1부", 
-  3100: "유망주 2부", 
-  3200: "유망주 3부",
-  4000: "세미프로 1부", 
-  4100: "세미프로 2부", 
-  4200: "세미프로 3부",
-  5000: "유망주 1부", 
-  5100: "유망주 2부", 
-  5200: "유망주 3부"
+  800: "슈퍼 챔피언스", 900: "챔피언스", 1000: "슈퍼 챌린지", 1100: "챌린지 1부", 1200: "챌린지 2부", 1300: "챌린지 3부",
+  2000: "월드클래스 1부", 2100: "월드클래스 2부", 2200: "월드클래스 3부", 2300: "월드클래스 3부",
+  2400: "프로 1부", 2500: "프로 2부", 2600: "프로 3부",
+  2700: "세미프로 1부", 2800: "세미프로 2부", 2900: "세미프로 3부",
+  3000: "유망주 1부", 3100: "유망주 2부", 3200: "유망주 3부",
+  4000: "세미프로 1부", 4100: "세미프로 2부", 4200: "세미프로 3부",
+  5000: "유망주 1부", 5100: "유망주 2부", 5200: "유망주 3부"
 };
 
 interface Streamer { id: number; name: string; soopId: string; fcoNickname: string; tier: string; isLive: boolean; viewers: number; }
@@ -63,6 +44,8 @@ export default function MKTOWNPage() {
 
   const [searchInput, setSearchInput] = useState<string>('');
   const [searchResult, setSearchResult] = useState<Streamer | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+
   const [nexonBasic, setNexonBasic] = useState<any>(null);
   const [nexonRank, setNexonRank] = useState<any>(null);
   const [cusStats, setCusStats] = useState<any>(null);
@@ -70,7 +53,6 @@ export default function MKTOWNPage() {
   const [h2hData, setH2hData] = useState<H2HStat[]>([]);
 
   const [selectedH2H, setSelectedH2H] = useState<H2HStat | null>(null);
-
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingText, setLoadingText] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
@@ -140,7 +122,6 @@ export default function MKTOWNPage() {
              setNotices([]);
            }
         }
-
       } catch (error) { console.error('시트 로드 실패:', error); }
     }
     fetchData();
@@ -163,19 +144,31 @@ export default function MKTOWNPage() {
     const queryName = targetName || searchInput;
     if (!queryName.trim()) return;
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
+    // 💡 [핵심] 시트에 없는 사람 검색 원천 차단!
     const found = streamers.find(s => s.name.includes(queryName) || s.fcoNickname.includes(queryName));
-    const searchTargetNickname = found ? found.fcoNickname : queryName;
+    
+    if (!found) {
+      alert("명단에 없는 스트리머 또는 구단주입니다.\n아직 데이터베이스에 없다면 숲 melonoff 로 [스트리머명+구단주닉네임] 제보 부탁드립니다!");
+      setIsDropdownOpen(false); // 드롭다운 닫기
+      return; // 검색 중단
+    }
 
-    setSearchResult(found || { id: 999, name: searchTargetNickname, soopId: '', fcoNickname: searchTargetNickname, tier: '일반유저', isLive: false, viewers: 0 });
+    // 시트에 있는 사람일 경우에만 검색 진행
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const searchTargetNickname = found.fcoNickname;
+
+    setSearchResult(found);
     setNexonBasic(null); setNexonRank(null); setCusStats(null); setMatchLogs([]); setH2hData([]);
     
     setIsLoading(true); setProgress(5); setLoadingText('서버 접속 중...');
     
     try {
       const dataId = await fetchNexonAPI(`/fconline/v1/id?nickname=${encodeURIComponent(searchTargetNickname)}`);
-      if (!dataId.ouid) { alert("구단주를 찾을 수 없습니다."); setIsLoading(false); return; }
+      if (!dataId.ouid) { 
+        alert("넥슨 서버에서 구단주를 찾을 수 없습니다. 구단주명이 변경되었을 수 있습니다."); 
+        setIsLoading(false); 
+        return; 
+      }
       const ouid = dataId.ouid;
       setProgress(15);
 
@@ -343,6 +336,10 @@ export default function MKTOWNPage() {
      });
   };
 
+  const filteredStreamers = searchInput.trim() === '' ? [] : streamers.filter(s => 
+    s.name.includes(searchInput) || s.fcoNickname.includes(searchInput)
+  );
+
   return (
     <main className="min-h-screen bg-[#050a08] text-slate-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30 relative">
       <style dangerouslySetInnerHTML={{ __html: `@keyframes drawLineAnimation { 0% { stroke-dashoffset: 30000; } 100% { stroke-dashoffset: 0; } }`}} />
@@ -497,12 +494,54 @@ export default function MKTOWNPage() {
 
         {activeTab === 'ranking' && (
           <div className="space-y-10 animate-fadeIn">
-            <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]"></div>
-              <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2"><span className="animate-pulse">🟢</span> FC 온라인 구단주 검색</h2>
-              <div className="flex gap-3">
-                <input type="text" placeholder="FC 온라인 구단주명 (예: 교로텔리)" className="flex-1 bg-[#050a08] border border-emerald-900/60 rounded-xl px-5 py-4 text-emerald-100 placeholder-emerald-800/50 focus:outline-none focus:border-emerald-500/80 transition-all font-bold" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
-                <button onClick={() => handleSearch()} disabled={isLoading} className="bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 text-[#050a08] px-10 py-4 rounded-xl text-sm font-black transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50">검색</button>
+            {/* 💡 [피드백 1 해결] overflow-hidden을 visible로 변경하여 드롭다운 잘림 방지 */}
+            <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-visible">
+              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 rounded-l-2xl shadow-[0_0_15px_rgba(16,185,129,0.8)]"></div>
+              <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2 ml-2"><span className="animate-pulse">🟢</span> FC 온라인 구단주 검색</h2>
+              
+              <div className="flex gap-3 relative ml-2">
+                <div className="relative flex-1">
+                  <input 
+                    type="text" 
+                    placeholder="FC 온라인 구단주명 (예: 교로텔리)" 
+                    className="w-full bg-[#050a08] border border-emerald-900/60 rounded-xl px-5 py-4 text-emerald-100 placeholder-emerald-800/50 focus:outline-none focus:border-emerald-500/80 transition-all font-bold" 
+                    value={searchInput} 
+                    onChange={(e) => setSearchInput(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                  />
+                  
+                  {/* 💡 [피드백 3 해결] 드롭다운 UI 디자인 대폭 개선 (사진, 이름, 구단주명, 티어 강조) */}
+                  {isDropdownOpen && searchInput.trim() !== '' && (
+                    <div className="absolute top-full left-0 w-full mt-2 bg-[#0a120e] border border-emerald-900/50 rounded-xl shadow-[0_15px_50px_-12px_rgba(16,185,129,0.25)] z-[100] max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 [&::-webkit-scrollbar-thumb]:rounded-full">
+                      {filteredStreamers.length > 0 ? (
+                        filteredStreamers.map(s => (
+                          <div 
+                            key={s.id} 
+                            onClick={() => { setSearchInput(s.fcoNickname); handleSearch(s.fcoNickname); setIsDropdownOpen(false); }}
+                            className="flex items-center gap-4 p-4 border-b border-emerald-900/30 hover:bg-emerald-900/40 cursor-pointer transition-colors last:border-0"
+                          >
+                            <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full border border-emerald-500/50 object-cover shadow-[0_0_10px_rgba(16,185,129,0.2)]" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                            <div className="flex flex-col flex-1">
+                              <span className="text-white font-black text-sm">{s.name}</span>
+                              <span className="text-emerald-400 text-xs font-mono font-bold mt-0.5">구단주: {s.fcoNickname}</span>
+                            </div>
+                            <span className="shrink-0 bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-[10px] font-bold px-2 py-1 rounded-md">{s.tier}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-6 text-center text-sm text-slate-400 leading-relaxed bg-[#050a08]/50">
+                          <p className="text-xl mb-2">😢</p>
+                          <p className="font-bold text-slate-200 mb-1">명단에 등록되지 않은 구단주입니다.</p>
+                          <p><span className="text-emerald-400 font-bold bg-emerald-900/30 px-1 py-0.5 rounded">숲 melonoff</span> 로</p>
+                          <p className="text-xs mt-1 text-slate-500">[스트리머명 + 구단주닉네임] 제보 부탁드립니다!</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => handleSearch()} disabled={isLoading} className="bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 text-[#050a08] px-10 py-4 rounded-xl text-sm font-black transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50 shrink-0">검색</button>
               </div>
             </div>
 
@@ -581,10 +620,10 @@ export default function MKTOWNPage() {
                               </div>
                               
                               <div className="flex gap-2 pl-2 mt-2">
-                                <button onClick={() => setSelectedH2H(stat)} className="flex-1 py-2 bg-emerald-900/20 hover:bg-emerald-800/40 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-800/30 transition-colors flex items-center justify-center gap-1">
+                                <button onClick={() => setSelectedH2H(stat)} className="flex-1 py-2 bg-emerald-900/20 hover:bg-emerald-800/40 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-800/30 transition-colors flex items-center justify-center gap-1 z-10 relative">
                                   📄 상세
                                 </button>
-                                <button onClick={() => { setSearchInput(stat.streamer.fcoNickname); handleSearch(stat.streamer.fcoNickname); }} className="flex-1 py-2 bg-blue-900/20 hover:bg-blue-800/40 text-blue-400 text-xs font-bold rounded-lg border border-blue-800/30 transition-colors flex items-center justify-center gap-1">
+                                <button onClick={() => { setSearchInput(stat.streamer.fcoNickname); handleSearch(stat.streamer.fcoNickname); }} className="flex-1 py-2 bg-blue-900/20 hover:bg-blue-800/40 text-blue-400 text-xs font-bold rounded-lg border border-blue-800/30 transition-colors flex items-center justify-center gap-1 z-10 relative">
                                   🏃‍♂️ 이동
                                 </button>
                               </div>
