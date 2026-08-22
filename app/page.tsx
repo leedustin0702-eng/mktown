@@ -17,9 +17,33 @@ const CSV_PPUROPA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5
 const CSV_NOTICE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1640060087&single=true&output=csv";
 // ==========================================
 
+// 💡 넥슨 공식 등급 번호 전체 완벽 매핑 (2800 = 세미프로 2부 등 전체 포함!)
 const DIVISIONS: Record<number, string> = {
-  800: "슈퍼 챔피언스", 900: "챔피언스", 1000: "슈퍼 챌린지", 1100: "챌린지 1부", 1200: "챌린지 2부", 1300: "챌린지 3부",
-  2000: "월드클래스 1부", 2100: "월드클래스 2부", 2200: "월드클래스 3부", 3000: "프로 1부", 3100: "프로 2부", 3200: "프로 3부"
+  800: "슈퍼 챔피언스", 
+  900: "챔피언스", 
+  1000: "슈퍼 챌린지", 
+  1100: "챌린지 1부", 
+  1200: "챌린지 2부", 
+  1300: "챌린지 3부",
+  2000: "월드클래스 1부", 
+  2100: "월드클래스 2부", 
+  2200: "월드클래스 3부", 
+  2300: "월드클래스 3부",
+  2400: "프로 1부", 
+  2500: "프로 2부", 
+  2600: "프로 3부",
+  2700: "세미프로 1부", 
+  2800: "세미프로 2부", 
+  2900: "세미프로 3부",
+  3000: "유망주 1부", 
+  3100: "유망주 2부", 
+  3200: "유망주 3부",
+  4000: "세미프로 1부", 
+  4100: "세미프로 2부", 
+  4200: "세미프로 3부",
+  5000: "유망주 1부", 
+  5100: "유망주 2부", 
+  5200: "유망주 3부"
 };
 
 interface Streamer { id: number; name: string; soopId: string; fcoNickname: string; tier: string; isLive: boolean; viewers: number; }
@@ -108,7 +132,6 @@ export default function MKTOWNPage() {
         setPpuropa(parseCSV(await resRopa.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
         setFishman(parseCSV(await resFish.text()).map(c => ({ name: c[0], step: c[1] })));
         
-        // 💡 가짜 데이터 제거, 시트에 내용이 있을 때만 셋팅!
         if(resNotice && resNotice.ok) {
            const noticeData = parseCSV(await resNotice.text());
            if(noticeData.length > 0) {
@@ -386,7 +409,6 @@ export default function MKTOWNPage() {
               <h2 className="text-3xl font-black text-white flex items-center gap-3"><span className="text-emerald-500">🏆</span> 진행 중인 대회 및 콘텐츠</h2>
             </div>
 
-            {/* 💡 [피드백 반영] 공지사항 시트 연동 (최대 3개 노출) */}
             {notices.length > 0 && (
               <div className="w-full bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-4 md:p-5 shadow-lg flex flex-col md:flex-row gap-4 mb-6 relative overflow-hidden">
                 <div className="absolute left-0 top-0 w-1 h-full bg-emerald-500"></div>
@@ -547,7 +569,6 @@ export default function MKTOWNPage() {
                       h2hData.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {h2hData.map((stat, idx) => (
-                            // 💡 [피드백 반영] 전체 클릭 이벤트 삭제, 하단에 버튼 2개 추가
                             <div key={idx} className="bg-[#050a08] border border-emerald-900/30 rounded-2xl p-4 flex flex-col gap-3 group hover:border-emerald-500/50 transition-colors relative overflow-hidden">
                               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-900 group-hover:bg-emerald-500 transition-colors"></div>
                               
@@ -559,7 +580,6 @@ export default function MKTOWNPage() {
                                 </div>
                               </div>
                               
-                              {/* 💡 [피드백 반영] 상세 전적 / 이동 버튼 분리 */}
                               <div className="flex gap-2 pl-2 mt-2">
                                 <button onClick={() => setSelectedH2H(stat)} className="flex-1 py-2 bg-emerald-900/20 hover:bg-emerald-800/40 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-800/30 transition-colors flex items-center justify-center gap-1">
                                   📄 상세
@@ -580,7 +600,6 @@ export default function MKTOWNPage() {
           </div>
         )}
 
-        {/* 4. 롤 내전 팀 뽑기 */}
         {activeTab === 'lol' && (
           <div className="flex flex-col gap-8 animate-fadeIn max-w-5xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -603,7 +622,6 @@ export default function MKTOWNPage() {
           </div>
         )}
 
-        {/* 5. 아케이드 핀볼 */}
         {activeTab === 'pinball' && (
           <div className="max-w-4xl mx-auto animate-fadeIn space-y-8">
             <div className="bg-[#0a120e] border border-pink-900/50 rounded-3xl p-8 shadow-[0_0_40px_rgba(236,72,153,0.1)] relative overflow-hidden"><h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400 mb-2 text-center relative z-10">🎯 아케이드 럭키 핀볼</h2>
@@ -620,7 +638,6 @@ export default function MKTOWNPage() {
           </div>
         )}
 
-        {/* 6. 사다리 타기 */}
         {activeTab === 'ladder' && (
           <div className="max-w-6xl mx-auto animate-fadeIn space-y-8">
             <div className="bg-[#0a120e] border border-amber-900/50 rounded-3xl p-8 shadow-[0_0_40px_rgba(245,158,11,0.1)] relative overflow-hidden"><h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 mb-2 text-center">🪜 사다리 타기</h2>
