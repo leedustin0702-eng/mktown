@@ -231,7 +231,15 @@ export default function MKTOWNPage() {
         const res = myInfo.matchDetail.matchResult;
         const myScore = myInfo.shoot.goalTotal;
         const oppScore = oppInfo.shoot.goalTotal;
-        const dateStr = match.matchDate.substring(5, 16).replace('T', ' ');
+        
+        // 💡 [수정] 넥슨 API의 영국 시간(UTC)을 한국 시간(KST)으로 정확하게 변환합니다!
+        const utcDateStr = match.matchDate.endsWith('Z') ? match.matchDate : match.matchDate + 'Z';
+        const d = new Date(utcDateStr);
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        const dateStr = `${month}-${day} ${hours}:${mins}`;
         
         if (res === '승') wins++; else if (res === '무') draws++; else if (res === '패') losses++;
         totalGF += myScore; totalGA += oppScore;
@@ -497,6 +505,7 @@ export default function MKTOWNPage() {
             <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-visible">
               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 rounded-l-2xl shadow-[0_0_15px_rgba(16,185,129,0.8)]"></div>
               
+              {/* 💡 [수정] 텍스트 "스트리머 및 구단주 전적 검색"으로 변경 */}
               <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2 ml-2">
                 <span className="animate-pulse">🟢</span> 스트리머 및 구단주 전적 검색
               </h2>
