@@ -62,8 +62,6 @@ export default function MKTOWNPage() {
   const [ladderPath, setLadderPath] = useState<{x:number, y:number}[] | null>(null);
   const [ladderEndIdx, setLadderEndIdx] = useState<number | null>(null);
   const [isLadderAnimating, setIsLadderAnimating] = useState<boolean>(false);
-  
-  // 💡 핵심! 번호를 누를 때마다 애니메이션을 새롭게 강제로 시작하게 만드는 키(Key) 값
   const [ladderAnimKey, setLadderAnimKey] = useState<number>(0);
 
   // 구글 시트 데이터 로드
@@ -120,21 +118,30 @@ export default function MKTOWNPage() {
       setProgress(25);
 
       setLoadingText('최근 매치 식별자 가져오는 중...');
+      // 💡 서비스 키 승인 완료! matchtype=40(커스텀/클래식 1on1) & limit=100 으로 파워업!
       const cusMatchIds = await fetchNexonAPI(`/fconline/v1/user/match?ouid=${ouid}&matchtype=40&offset=0&limit=100`).catch(() => []);
       setProgress(35);
 
       let matchDetails: any[] = [];
+      let apiLimitReached = false; 
+
       if (Array.isArray(cusMatchIds) && cusMatchIds.length > 0) {
-        setLoadingText('100경기 분석 진행 중...');
-        const chunkSize = 5; 
+        setLoadingText('커스텀 1on1 100경기 분석 진행 중...');
+        // 💡 서비스 키는 쾌속 호출이 가능하므로 한 번에 10개씩 빠르게 처리
+        const chunkSize = 10; 
         for (let i = 0; i < cusMatchIds.length; i += chunkSize) {
+          if (apiLimitReached) break;
+
           const chunk = cusMatchIds.slice(i, i + chunkSize);
           const chunkResults = await Promise.all(
             chunk.map(async (id) => {
               for (let attempt = 0; attempt < 3; attempt++) {
                 try {
                   const r = await fetch(`/api/nexon?endpoint=${encodeURIComponent(`/fconline/v1/match-detail?matchid=${id}`)}`);
-                  if (r.status === 429) { await new Promise(res => setTimeout(res, 800)); continue; }
+                  if (r.status === 429 || r.status === 403) { 
+                    apiLimitReached = true; 
+                    return null; 
+                  }
                   if (!r.ok) return null;
                   return await r.json();
                 } catch (e) { await new Promise(res => setTimeout(res, 500)); }
@@ -144,6 +151,7 @@ export default function MKTOWNPage() {
           );
           matchDetails.push(...chunkResults.filter(r => r !== null));
           setProgress(35 + Math.floor(((i + chunkSize) / cusMatchIds.length) * 60));
+          // 💡 딜레이도 100ms로 확 줄여서 분석 체감 속도 UP!
           await new Promise(res => setTimeout(res, 100)); 
         }
       }
@@ -200,6 +208,10 @@ export default function MKTOWNPage() {
       setH2hData(Object.values(h2hMap).sort((a, b) => (b.wins + b.draws + b.losses) - (a.wins + a.draws + a.losses)));
       setProgress(100);
 
+      if (apiLimitReached) {
+        setTimeout(() => alert("⚠️ 일시적인 네트워크 오류로 100경기를 전부 불러오지 못했습니다. 잠시 후 다시 시도해주세요."), 500);
+      }
+
     } catch (e) {
       console.error(e); alert("데이터 로드 실패.");
     } finally {
@@ -209,7 +221,6 @@ export default function MKTOWNPage() {
 
   const goHome = () => { setActiveTab('home'); setSearchResult(null); setNexonRank(null); setNexonBasic(null); setH2hData([]); setSearchInput(''); };
 
-  // --- 롤 내전 팀 섞기 ---
   const handleShuffleTeams = () => {
     const blue: Record<string, string> = {}; const red: Record<string, string> = {};
     Object.keys(lolPlayers).forEach((role) => {
@@ -246,7 +257,6 @@ export default function MKTOWNPage() {
     roll();
   };
 
-  // --- 🪜 사다리 타기 로직 ---
   const SVG_W = 1000;
   const SVG_H = 1000;
   const getX = (c: number) => (c + 0.5) * (SVG_W / ladderCols);
@@ -270,7 +280,7 @@ export default function MKTOWNPage() {
 
   const traceLadder = (startCol: number) => {
     if (ladderLines.length === 0) { alert('먼저 사다리를 생성해주세요!'); return; }
-    if (isLadderAnimating) return; // 내려가는 도중에는 다른 사람 클릭 방지
+    if (isLadderAnimating) return; 
 
     let c = startCol;
     const path = [{x: c, y: 0}];
@@ -289,10 +299,8 @@ export default function MKTOWNPage() {
     setLadderEndIdx(null); 
     setIsLadderAnimating(true); 
     
-    // 💡 번호를 누를 때마다 이 키값이 바뀌면서 애니메이션이 완전히 '새로' 처음부터 그려집니다!
     setLadderAnimKey(Date.now()); 
 
-    // 애니메이션 3초(3000ms) 대기 후 최종 결과 짠!
     setTimeout(() => {
       setLadderEndIdx(c);
       setIsLadderAnimating(false);
@@ -304,7 +312,6 @@ export default function MKTOWNPage() {
   return (
     <main className="min-h-screen bg-[#050a08] text-slate-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30 relative">
       
-      {/* 💡 엄청 긴 사다리(20명)도 완벽하게 커버하는 3초 쫄깃 애니메이션 */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes drawLineAnimation {
           0% { stroke-dashoffset: 30000; }
@@ -352,7 +359,6 @@ export default function MKTOWNPage() {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-emerald-900/50 pb-6">
           <button onClick={goHome} className="text-left group cursor-pointer flex flex-col gap-1">
             <div className="flex items-center gap-3">
-              {/* 로고 이미지 표시 (에러나면 아예 숨김 처리) */}
               {!logoError && (
                 <img 
                   src="/logo.png" 
@@ -402,7 +408,7 @@ export default function MKTOWNPage() {
             </div>
             <h2 className="text-3xl font-black text-white mb-4">MK&apos;s playground 데이터 허브에 오신 것을 환영합니다</h2>
             <p className="text-emerald-500/80 text-center max-w-lg mb-8 leading-relaxed">
-              상단의 <strong className="text-emerald-400">[FCO 전적]</strong> 메뉴를 클릭하여 스트리머들의 실시간 클래식 1on1 매치 성적과 상대 전적을 검색해 보세요.
+              상단의 <strong className="text-emerald-400">[FCO 전적]</strong> 메뉴를 클릭하여 스트리머들의 실시간 커스텀 1on1 매치 성적과 상대 전적을 검색해 보세요.
             </p>
             <button onClick={() => setActiveTab('ranking')} className="bg-emerald-600 hover:bg-emerald-500 text-[#050a08] font-black px-8 py-3 rounded-full transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]">
               FCO 전적 검색하러 가기 ➔
@@ -413,6 +419,7 @@ export default function MKTOWNPage() {
         {/* 2. FCO 전적 화면 */}
         {activeTab === 'ranking' && (
           <div className="space-y-10 animate-fadeIn">
+            
             <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]"></div>
               <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2">
@@ -466,7 +473,7 @@ export default function MKTOWNPage() {
                   </div>
 
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 shadow-2xl">
-                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span className="text-emerald-500">📊</span> 최근 100경기 스탯 요약</h3>
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span className="text-emerald-500">📊</span> 최근 커스텀 1on1 100경기 스탯 요약</h3>
                     {cusStats && cusStats.total > 0 ? (
                       <div className="space-y-5">
                         <div className="flex justify-between items-center bg-[#050a08] p-4 rounded-2xl border border-emerald-900/30">
@@ -500,7 +507,7 @@ export default function MKTOWNPage() {
                 <div className="xl:col-span-2 space-y-6">
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 md:p-8 shadow-2xl">
                     <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2 border-b border-emerald-900/30 pb-3">
-                      <span className="text-emerald-500">📝</span> 최근 경기 로그 <span className="text-xs font-normal text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded ml-2">클래식 1on1</span>
+                      <span className="text-emerald-500">📝</span> 최근 경기 로그 <span className="text-xs font-normal text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded ml-2">커스텀 1on1</span>
                     </h3>
                     {matchLogs.length > 0 ? (
                       <div className="space-y-2">
@@ -734,7 +741,6 @@ export default function MKTOWNPage() {
                     ))}
                   </div>
 
-                  {/* 💡 투명해지는 버그를 완벽히 차단한 1000x1000 절대좌표 SVG 영역 */}
                   <div className="relative h-[450px] w-full bg-[#050812] border border-amber-900/30 rounded-2xl overflow-hidden shadow-inner">
                     {ladderLines.length === 0 ? (
                       <div className="absolute inset-0 flex items-center justify-center text-amber-900/50 font-black text-2xl tracking-widest">생성 버튼을 눌러주세요</div>
@@ -748,7 +754,6 @@ export default function MKTOWNPage() {
                             <line key={`h-${r}-${c}`} x1={getX(c)} y1={getY(r+1)} x2={getX(c+1)} y2={getY(r+1)} stroke="#451a03" strokeWidth="6" />
                           ))
                         )}
-                        {/* 💡 누를 때마다 완전히 새로 그려지는 3초짜리 레이저 불빛! */}
                         {ladderPath && (
                           <polyline
                             key={ladderAnimKey}
