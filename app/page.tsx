@@ -144,17 +144,16 @@ export default function MKTOWNPage() {
     const queryName = targetName || searchInput;
     if (!queryName.trim()) return;
 
-    // 💡 [핵심] 시트에 없는 사람 검색 원천 차단!
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
     const found = streamers.find(s => s.name.includes(queryName) || s.fcoNickname.includes(queryName));
     
     if (!found) {
       alert("명단에 없는 스트리머 또는 구단주입니다.\n아직 데이터베이스에 없다면 숲 melonoff 로 [스트리머명+구단주닉네임] 제보 부탁드립니다!");
-      setIsDropdownOpen(false); // 드롭다운 닫기
-      return; // 검색 중단
+      setIsDropdownOpen(false); 
+      return; 
     }
 
-    // 시트에 있는 사람일 경우에만 검색 진행
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     const searchTargetNickname = found.fcoNickname;
 
     setSearchResult(found);
@@ -271,6 +270,7 @@ export default function MKTOWNPage() {
   };
 
   const goHome = () => { setActiveTab('home'); setSearchResult(null); setNexonRank(null); setNexonBasic(null); setH2hData([]); setSearchInput(''); };
+
   const handleShuffleTeams = () => {
     const blue: Record<string, string> = {}; const red: Record<string, string> = {};
     Object.keys(lolPlayers).forEach((role) => {
@@ -494,16 +494,18 @@ export default function MKTOWNPage() {
 
         {activeTab === 'ranking' && (
           <div className="space-y-10 animate-fadeIn">
-            {/* 💡 [피드백 1 해결] overflow-hidden을 visible로 변경하여 드롭다운 잘림 방지 */}
             <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-visible">
               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 rounded-l-2xl shadow-[0_0_15px_rgba(16,185,129,0.8)]"></div>
-              <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2 ml-2"><span className="animate-pulse">🟢</span> FC 온라인 구단주 검색</h2>
+              
+              <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2 ml-2">
+                <span className="animate-pulse">🟢</span> 스트리머 및 구단주 전적 검색
+              </h2>
               
               <div className="flex gap-3 relative ml-2">
                 <div className="relative flex-1">
                   <input 
                     type="text" 
-                    placeholder="FC 온라인 구단주명 (예: 교로텔리)" 
+                    placeholder="스트리머명 또는 구단주명 입력 (예: 김민교, 교로텔리)" 
                     className="w-full bg-[#050a08] border border-emerald-900/60 rounded-xl px-5 py-4 text-emerald-100 placeholder-emerald-800/50 focus:outline-none focus:border-emerald-500/80 transition-all font-bold" 
                     value={searchInput} 
                     onChange={(e) => setSearchInput(e.target.value)} 
@@ -512,7 +514,6 @@ export default function MKTOWNPage() {
                     onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
                   />
                   
-                  {/* 💡 [피드백 3 해결] 드롭다운 UI 디자인 대폭 개선 (사진, 이름, 구단주명, 티어 강조) */}
                   {isDropdownOpen && searchInput.trim() !== '' && (
                     <div className="absolute top-full left-0 w-full mt-2 bg-[#0a120e] border border-emerald-900/50 rounded-xl shadow-[0_15px_50px_-12px_rgba(16,185,129,0.25)] z-[100] max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 [&::-webkit-scrollbar-thumb]:rounded-full">
                       {filteredStreamers.length > 0 ? (
