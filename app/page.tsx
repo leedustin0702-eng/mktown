@@ -29,7 +29,7 @@ interface H2HStat { streamer: Streamer; wins: number; draws: number; losses: num
 
 export default function MKTOWNPage() {
   const [streamers, setStreamers] = useState<Streamer[]>([]);
-  const [activeTab, setActiveTab] = useState<string>('home'); // 기본 화면은 'home'
+  const [activeTab, setActiveTab] = useState<string>('home');
   const [logoError, setLogoError] = useState<boolean>(false);
 
   // --- 대회/콘텐츠 상태 ---
@@ -106,7 +106,7 @@ export default function MKTOWNPage() {
         const dCup = parseCSV(await resCup.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] }));
         const dChamps = parseCSV(await resChamps.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] }));
         const dRopa = parseCSV(await resRopa.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] }));
-        const dFish = parseCSV(await resFish.text()).map(c => ({ name: c[0], step: c[1] })); // 어인섬은 시즌 제외
+        const dFish = parseCSV(await resFish.text()).map(c => ({ name: c[0], step: c[1] }));
 
         setPpudcup(dCup);
         setPpuchamps(dChamps);
@@ -118,8 +118,13 @@ export default function MKTOWNPage() {
     fetchData();
   }, []);
 
+  // 💡 [핵심 수정] 캐시(Cache) 완벽 무력화: 항상 최신 전적만 가져오도록 시간(Date.now) 강제 주입
   const fetchNexonAPI = async (endpoint: string) => {
-    const res = await fetch(`/api/nexon?endpoint=${encodeURIComponent(endpoint)}`);
+    const url = `/api/nexon?endpoint=${encodeURIComponent(endpoint)}&_t=${Date.now()}`;
+    const res = await fetch(url, { 
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
+    });
     if (!res.ok) throw new Error('API Error');
     return res.json();
   };
@@ -153,7 +158,8 @@ export default function MKTOWNPage() {
 
       if (Array.isArray(cusMatchIds) && cusMatchIds.length > 0) {
         setLoadingText('커스텀 1on1 100경기 분석 진행 중...');
-        const chunkSize = 10; 
+        // 💡 [핵심 수정] 클라우드플레어 디도스 방어망 우회: 청크 크기를 5로 줄이고 딜레이를 200ms로 늘림
+        const chunkSize = 5; 
         for (let i = 0; i < cusMatchIds.length; i += chunkSize) {
           if (apiLimitReached) break;
           const chunk = cusMatchIds.slice(i, i + chunkSize);
@@ -161,7 +167,8 @@ export default function MKTOWNPage() {
             chunk.map(async (id) => {
               for (let attempt = 0; attempt < 3; attempt++) {
                 try {
-                  const r = await fetch(`/api/nexon?endpoint=${encodeURIComponent(`/fconline/v1/match-detail?matchid=${id}`)}`);
+                  const url = `/api/nexon?endpoint=${encodeURIComponent(`/fconline/v1/match-detail?matchid=${id}`)}&_t=${Date.now()}`;
+                  const r = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' }});
                   if (r.status === 429 || r.status === 403) { apiLimitReached = true; return null; }
                   if (!r.ok) return null;
                   return await r.json();
@@ -172,7 +179,7 @@ export default function MKTOWNPage() {
           );
           matchDetails.push(...chunkResults.filter(r => r !== null));
           setProgress(35 + Math.floor(((i + chunkSize) / cusMatchIds.length) * 60));
-          await new Promise(res => setTimeout(res, 100)); 
+          await new Promise(res => setTimeout(res, 200)); 
         }
       }
 
@@ -228,7 +235,7 @@ export default function MKTOWNPage() {
       setH2hData(Object.values(h2hMap).sort((a, b) => (b.wins + b.draws + b.losses) - (a.wins + a.draws + a.losses)));
       setProgress(100);
 
-      if (apiLimitReached) setTimeout(() => alert("⚠️ 일시적인 네트워크 오류로 100경기를 전부 불러오지 못했습니다. 잠시 후 다시 시도해주세요."), 500);
+      if (apiLimitReached) setTimeout(() => alert("⚠️ 보안 시스템(WAF) 통과를 위해 일부 전적만 불러왔습니다. 잠시 후 다시 시도해주세요."), 500);
 
     } catch (e) { console.error(e); alert("데이터 로드 실패."); }
     finally { setTimeout(() => { setIsLoading(false); setLoadingText(''); setProgress(0); }, 500); }
