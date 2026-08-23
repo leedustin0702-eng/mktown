@@ -148,7 +148,6 @@ export default function MKTOWNPage() {
     fetchData();
   }, []);
 
-  // 💡 [수정] 배너 타이머 로직 (currentBannerIdx를 배열에 넣어 사용자가 클릭 시 타이머 리셋)
   useEffect(() => {
     if (banners.length <= 1) return;
     const timer = setInterval(() => {
@@ -157,7 +156,6 @@ export default function MKTOWNPage() {
     return () => clearInterval(timer);
   }, [banners.length, currentBannerIdx]);
 
-  // 💡 [추가] 수동 배너 이동 함수
   const handlePrevBanner = () => {
     setCurrentBannerIdx((prev) => (prev === 0 ? banners.length - 1 : prev - 1));
   };
@@ -324,7 +322,6 @@ export default function MKTOWNPage() {
     });
     setBlueTeam(blue); setRedTeam(red);
   };
-  
   const handleStartPinball = () => {
     const arr = pbItems.split(',').map(s => s.trim()).filter(Boolean);
     if(arr.length < 2) { alert('쉼표(,)로 구분해서 2개 이상 입력하세요!'); return; }
@@ -418,7 +415,8 @@ export default function MKTOWNPage() {
   const currentPpuropa = ppuropa.filter(p => p.season === latestPpuropaSeason && p.name);
   const isPpuropaAutoOpen = currentPpuropa.length > 0;
 
-  const minkyoData = streamers.find(s => s.name === '김민교');
+  // 💡 [수정] "김민교." 로 시트지의 정확한 이름을 찾습니다!
+  const minkyoData = streamers.find(s => s.name === '김민교.');
   const isMinkyoLive = minkyoData?.isLive || false;
 
   return (
@@ -567,7 +565,6 @@ export default function MKTOWNPage() {
                   </div>
                 ))}
                 
-                {/* 💡 [추가] 좌우 매뉴얼 슬라이드 화살표 */}
                 {banners.length > 1 && (
                   <>
                     <button 
@@ -583,7 +580,6 @@ export default function MKTOWNPage() {
                       &#10095;
                     </button>
 
-                    {/* 💡 [변경] 하단 점(인디케이터) 클릭 기능 추가 */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20 bg-black/50 px-3 py-1.5 rounded-full">
                       {banners.map((_, idx) => (
                         <div 
