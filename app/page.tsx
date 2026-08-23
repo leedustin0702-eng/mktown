@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from 'react';
 
 // ==========================================
-// ⚙️ 시즌 및 콘텐츠 설정 스위치
+// ⚙️ 콘텐츠 설정 스위치
 // ==========================================
-const CURRENT_SEASON = "시즌1";
 const IS_PPUROPA_OPEN = false;
 
 // API 주소 (시트 주소)
@@ -15,6 +14,7 @@ const CSV_PPUCHAMPS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJ
 const CSV_FISHMAN = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1716437779&single=true&output=csv";
 const CSV_PPUROPA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1339520970&single=true&output=csv";
 const CSV_NOTICE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1640060087&single=true&output=csv";
+const CSV_BANNER = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=846801615&single=true&output=csv";
 // ==========================================
 
 const DIVISIONS: Record<number, string> = {
@@ -31,9 +31,21 @@ interface Streamer { id: number; name: string; soopId: string; fcoNickname: stri
 interface MatchLog { date: string; result: string; myScore: number; oppScore: number; oppName: string; }
 interface H2HStat { streamer: Streamer; wins: number; draws: number; losses: number; recentMatches: MatchLog[]; }
 
+const getLatestSeason = (data: any[]) => {
+  const seasons = Array.from(new Set(data.map(d => d.season).filter(s => s && s.trim() !== '')));
+  if (seasons.length === 0) return "시즌1"; 
+  return seasons.sort((a, b) => {
+    const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
+    const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+    return numB - numA; 
+  })[0];
+};
+
 export default function MKTOWNPage() {
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [notices, setNotices] = useState<any[]>([]); 
+  const [banners, setBanners] = useState<string[]>([]);
+  const [currentBannerIdx, setCurrentBannerIdx] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [logoError, setLogoError] = useState<boolean>(false);
 
@@ -77,6 +89,7 @@ export default function MKTOWNPage() {
   const [ladderEndIdx, setLadderEndIdx] = useState<number | null>(null);
   const [isLadderAnimating, setIsLadderAnimating] = useState<boolean>(false);
   const [ladderAnimKey, setLadderAnimKey] = useState<number>(0);
+  const [ladderAllResults, setLadderAllResults] = useState<{player: string, result: string}[] | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -87,13 +100,14 @@ export default function MKTOWNPage() {
       };
 
       try {
-        const [resMain, resCup, resChamps, resFish, resRopa, resNotice] = await Promise.all([
+        const [resMain, resCup, resChamps, resFish, resRopa, resNotice, resBanner] = await Promise.all([
           fetch(CSV_MAIN, { cache: 'no-store' }),
           fetch(CSV_PPUDCUP, { cache: 'no-store' }),
           fetch(CSV_PPUCHAMPS, { cache: 'no-store' }),
           fetch(CSV_FISHMAN, { cache: 'no-store' }),
           fetch(CSV_PPUROPA, { cache: 'no-store' }),
-          fetch(CSV_NOTICE, { cache: 'no-store' }).catch(() => null)
+          fetch(CSV_NOTICE, { cache: 'no-store' }).catch(() => null),
+          fetch(CSV_BANNER, { cache: 'no-store' }).catch(() => null)
         ]);
 
         const mainRows = parseCSV(await resMain.text());
@@ -118,14 +132,38 @@ export default function MKTOWNPage() {
            const noticeData = parseCSV(await resNotice.text());
            if(noticeData.length > 0) {
              setNotices(noticeData.map(c => ({ date: c[0], tag: c[1], title: c[2] })));
-           } else {
-             setNotices([]);
-           }
+           } else { setNotices([]); }
         }
+
+        if(resBanner && resBanner.ok) {
+           const bannerData = parseCSV(await resBanner.text());
+           const activeBanners = bannerData.filter(c => c[1] && c[1].toUpperCase() === 'O').map(c => c[0]).filter(Boolean);
+           setBanners([...activeBanners, 'DEFAULT_BANNER']);
+        } else {
+           setBanners(['DEFAULT_BANNER']);
+        }
+
       } catch (error) { console.error('시트 로드 실패:', error); }
     }
     fetchData();
   }, []);
+
+  // 💡 [수정] 배너 타이머 로직 (currentBannerIdx를 배열에 넣어 사용자가 클릭 시 타이머 리셋)
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentBannerIdx((prev) => (prev + 1) % banners.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [banners.length, currentBannerIdx]);
+
+  // 💡 [추가] 수동 배너 이동 함수
+  const handlePrevBanner = () => {
+    setCurrentBannerIdx((prev) => (prev === 0 ? banners.length - 1 : prev - 1));
+  };
+  const handleNextBanner = () => {
+    setCurrentBannerIdx((prev) => (prev + 1) % banners.length);
+  };
 
   const fetchNexonAPI = async (endpoint: string, retries = 3): Promise<any> => {
     try {
@@ -232,7 +270,6 @@ export default function MKTOWNPage() {
         const myScore = myInfo.shoot.goalTotal;
         const oppScore = oppInfo.shoot.goalTotal;
         
-        // 💡 [수정] 넥슨 API의 영국 시간(UTC)을 한국 시간(KST)으로 정확하게 변환합니다!
         const utcDateStr = match.matchDate.endsWith('Z') ? match.matchDate : match.matchDate + 'Z';
         const d = new Date(utcDateStr);
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -287,6 +324,7 @@ export default function MKTOWNPage() {
     });
     setBlueTeam(blue); setRedTeam(red);
   };
+  
   const handleStartPinball = () => {
     const arr = pbItems.split(',').map(s => s.trim()).filter(Boolean);
     if(arr.length < 2) { alert('쉼표(,)로 구분해서 2개 이상 입력하세요!'); return; }
@@ -298,8 +336,10 @@ export default function MKTOWNPage() {
     };
     roll();
   };
+
   const SVG_W = 1000; const SVG_H = 1000;
   const getX = (c: number) => (c + 0.5) * (SVG_W / ladderCols); const getY = (r: number) => r * (SVG_H / (LADDER_ROWS + 1));
+  
   const generateLadder = () => {
     const newLines = [];
     for (let r = 0; r < LADDER_ROWS; r++) {
@@ -307,8 +347,9 @@ export default function MKTOWNPage() {
       for (let c = 0; c < ladderCols - 1; c++) { if (c > 0 && rowArr[c-1]) continue; rowArr[c] = Math.random() > 0.6; }
       newLines.push(rowArr);
     }
-    setLadderLines(newLines); setLadderPath(null); setLadderEndIdx(null); setIsLadderAnimating(false);
+    setLadderLines(newLines); setLadderPath(null); setLadderEndIdx(null); setIsLadderAnimating(false); setLadderAllResults(null);
   };
+
   const traceLadder = (startCol: number) => {
     if (ladderLines.length === 0) { alert('먼저 사다리를 생성해주세요!'); return; }
     if (isLadderAnimating) return; 
@@ -318,9 +359,30 @@ export default function MKTOWNPage() {
        if (c < ladderCols - 1 && ladderLines[r][c]) { c++; path.push({x: c, y: r + 1}); } else if (c > 0 && ladderLines[r][c-1]) { c--; path.push({x: c, y: r + 1}); }
     }
     path.push({x: c, y: LADDER_ROWS + 1});
-    setLadderPath(path); setLadderEndIdx(null); setIsLadderAnimating(true); setLadderAnimKey(Date.now()); 
-    setTimeout(() => { setLadderEndIdx(c); setIsLadderAnimating(false); }, 3000); 
+    setLadderPath(path); setLadderEndIdx(null); setIsLadderAnimating(true); setLadderAnimKey(Date.now()); setLadderAllResults(null);
+    setTimeout(() => { setLadderEndIdx(c); setIsLadderAnimating(false); }, 1500); 
   };
+  const handleShowAllLadderResults = () => {
+    if (ladderLines.length === 0) { alert('먼저 사다리를 생성해주세요!'); return; }
+    if (isLadderAnimating) return;
+    const resultsMap = [];
+    for(let startCol = 0; startCol < ladderCols; startCol++) {
+      let c = startCol;
+      for (let r = 0; r < LADDER_ROWS; r++) {
+        if (c < ladderCols - 1 && ladderLines[r][c]) c++;
+        else if (c > 0 && ladderLines[r][c-1]) c--;
+      }
+      resultsMap.push({ player: ladderPlayers[startCol] || `참가자${startCol+1}`, result: ladderResults[c] || `결과${c+1}` });
+    }
+    setLadderAllResults(resultsMap);
+    setLadderPath(null); setLadderEndIdx(null);
+  };
+  const handleResetLadder = () => {
+    setLadderPlayers(Array.from({length: 20}, (_, i) => `참가자${i+1}`));
+    setLadderResults(Array.from({length: 20}, (_, i) => i % 2 === 0 ? '꽝' : '당첨'));
+    setLadderLines([]); setLadderPath(null); setLadderEndIdx(null); setIsLadderAnimating(false); setLadderAllResults(null);
+  };
+
   const renderPlayer = (p: any, type: 'tourney' | 'fishman') => {
     const streamer = streamers.find(s => s.name === p.name);
     const soopId = streamer?.soopId || '';
@@ -337,6 +399,7 @@ export default function MKTOWNPage() {
         </div>
     )
   };
+
   const sortTourney = (data: any[]) => {
      return [...data].sort((a, b) => {
         if (!a.rank && !b.rank) return 0; if (!a.rank) return 1; if (!b.rank) return -1;
@@ -347,6 +410,16 @@ export default function MKTOWNPage() {
   const filteredStreamers = searchInput.trim() === '' ? [] : streamers.filter(s => 
     s.name.includes(searchInput) || s.fcoNickname.includes(searchInput)
   );
+
+  const latestPpudcupSeason = getLatestSeason(ppudcup);
+  const latestPpuchampsSeason = getLatestSeason(ppuchamps);
+  const latestPpuropaSeason = getLatestSeason(ppuropa);
+
+  const currentPpuropa = ppuropa.filter(p => p.season === latestPpuropaSeason && p.name);
+  const isPpuropaAutoOpen = currentPpuropa.length > 0;
+
+  const minkyoData = streamers.find(s => s.name === '김민교');
+  const isMinkyoLive = minkyoData?.isLive || false;
 
   return (
     <main className="min-h-screen bg-[#050a08] text-slate-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30 relative">
@@ -400,7 +473,7 @@ export default function MKTOWNPage() {
             <p className="text-sm text-emerald-600/80 font-medium tracking-wide mt-1 ml-1">민교의 놀이터</p>
           </button>
           <nav className="flex space-x-2 overflow-x-auto pb-2 w-full md:w-auto [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50">
-            {[ { id: 'home', icon: '🏆', label: '메인(대회)' }, { id: 'ranking', icon: '🔍', label: 'FCO 전적' }, { id: 'members', icon: '✨', label: '스트리머 명단' }, { id: 'lol', icon: '⚔️', label: '롤 내전 뽑기' }, { id: 'pinball', icon: '🎯', label: '아케이드 핀볼' }, { id: 'ladder', icon: '🪜', label: '사다리 타기' }].map((tab) => (
+            {[ { id: 'home', icon: '🏠', label: '메인' }, { id: 'tourney', icon: '🏆', label: 'FCO 콘텐츠' }, { id: 'ranking', icon: '🔍', label: 'FCO 전적' }, { id: 'members', icon: '✨', label: 'FCO 스트리머 명단' }, { id: 'lol', icon: '⚔️', label: '롤 내전 뽑기' }, { id: 'pinball', icon: '🎯', label: '아케이드 핀볼' }, { id: 'ladder', icon: '🪜', label: '사다리 타기' }].map((tab) => (
               <button key={tab.id} disabled={isLoading} onClick={() => { setActiveTab(tab.id); if (tab.id === 'ranking') setSearchResult(null); }} className={`flex items-center gap-2 px-5 py-3 rounded-lg font-bold text-sm transition-all whitespace-nowrap border disabled:opacity-50 ${ activeTab === tab.id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-transparent text-slate-500 border-transparent hover:text-emerald-200 hover:bg-emerald-900/20' }`}>
                 <span>{tab.icon}</span>{tab.label}
               </button>
@@ -410,69 +483,167 @@ export default function MKTOWNPage() {
 
         {activeTab === 'home' && (
           <div className="animate-fadeIn space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-              <h2 className="text-3xl font-black text-white flex items-center gap-3"><span className="text-emerald-500">🏆</span> 진행 중인 대회 및 콘텐츠</h2>
-            </div>
-
-            {notices.length > 0 && (
-              <div className="w-full bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-4 md:p-5 shadow-lg flex flex-col md:flex-row gap-4 mb-6 relative overflow-hidden">
-                <div className="absolute left-0 top-0 w-1 h-full bg-emerald-500"></div>
-                <div className="flex items-center gap-2 shrink-0 md:border-r border-emerald-900/50 md:pr-4">
-                  <span className="animate-pulse text-lg">📢</span>
-                  <span className="font-black text-emerald-400">알림판</span>
-                </div>
-                <div className="flex flex-col justify-center gap-2 flex-1">
-                  {notices.slice(0, 3).map((n, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm">
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+            
+            <div className="w-full bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-5 md:p-6 shadow-2xl relative overflow-hidden mb-8">
+              <div className="absolute left-0 top-0 w-1.5 h-full bg-emerald-500"></div>
+              <h3 className="text-xl font-black text-white mb-5 flex items-center gap-2 border-b border-emerald-900/30 pb-3">
+                <span className="text-emerald-500 animate-pulse text-2xl">📢</span> 실시간 알림판
+              </h3>
+              {notices.length > 0 ? (
+                <div className="space-y-3">
+                  {notices.slice(0, 5).map((n, i) => (
+                    <div key={i} className="flex items-center gap-4 bg-[#050a08] p-4 rounded-xl border border-emerald-900/20 hover:border-emerald-500/40 transition-colors">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded shrink-0 ${
                         n.tag === '공지' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 
                         n.tag === '홍보' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' : 
                         n.tag === '업데이트' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 
                         'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       }`}>{n.tag}</span>
-                      <span className="text-slate-200 font-bold truncate">{n.title}</span>
-                      <span className="text-slate-600 text-[10px] ml-auto font-mono hidden sm:block">{n.date}</span>
+                      <span className="text-slate-200 font-bold text-sm flex-1 truncate">{n.title}</span>
+                      <span className="text-slate-600 text-xs font-mono hidden sm:block">{n.date}</span>
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-slate-500 text-sm text-center py-6">등록된 소식이 없습니다.</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <a href="https://play.sooplive.co.kr/phonics1" target="_blank" rel="noreferrer" className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all overflow-hidden group ${isMinkyoLive ? 'bg-red-950/20 border-red-900/50 hover:border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-[#0a120e] border-slate-800 hover:border-slate-600'}`}>
+                {isMinkyoLive && <div className="absolute inset-0 bg-gradient-to-t from-red-500/10 to-transparent opacity-50"></div>}
+                <div className="relative z-10 flex flex-col items-center gap-3">
+                  <div className={`text-4xl ${!isMinkyoLive && 'grayscale opacity-50'}`}>📺</div>
+                  <h4 className={`font-black text-lg flex items-center gap-2 ${isMinkyoLive ? 'text-red-400' : 'text-slate-400'}`}>
+                    김민교 생방송 
+                  </h4>
+                  <div className="mt-1">
+                    {isMinkyoLive ? (
+                      <span className="shrink-0 flex items-center gap-1.5 bg-red-950/40 px-2 py-1 rounded border border-red-900/50 shadow-[0_0_5px_rgba(239,68,68,0.2)]">
+                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]"></span>
+                        <span className="text-xs font-black text-red-500 tracking-wider">ON AIR</span>
+                      </span>
+                    ) : (
+                      <span className="shrink-0 flex items-center gap-1.5 bg-slate-900/60 px-2 py-1 rounded border border-slate-700/50">
+                        <span className="w-2 h-2 bg-slate-500 rounded-full"></span>
+                        <span className="text-xs font-black text-slate-400 tracking-wider">오프라인입니다</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </a>
+
+              <a href="https://www.sooplive.com/station/phonics1" target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center p-6 bg-[#0a120e] rounded-2xl border border-blue-900/30 hover:border-blue-500/80 hover:bg-blue-950/20 transition-all shadow-lg group">
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">📝</div>
+                <h4 className="font-black text-lg text-blue-400">김민교 방송국</h4>
+                <p className="text-xs text-slate-500 mt-2 font-bold">최신 공지 및 다시보기</p>
+              </a>
+
+              <a href="https://cafe.naver.com/0nepunchk1ng" target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center p-6 bg-[#0a120e] rounded-2xl border border-green-900/30 hover:border-[#03c75a]/80 hover:bg-[#03c75a]/10 transition-all shadow-lg group">
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">☕</div>
+                <h4 className="font-black text-lg text-[#03c75a]">패션민교 카페</h4>
+                <p className="text-xs text-slate-500 mt-2 font-bold">공식 네이버 팬카페</p>
+              </a>
+            </div>
+
+            {banners.length > 0 && (
+              <div className="w-full h-48 md:h-80 bg-[#050a08] rounded-3xl overflow-hidden relative border border-emerald-900/30 shadow-2xl group flex items-center justify-center">
+                {banners.map((item, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`absolute inset-0 w-full h-full transition-opacity duration-1000 flex items-center justify-center ${idx === currentBannerIdx ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                  >
+                    {item === 'DEFAULT_BANNER' ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-r from-emerald-950 via-[#0a120e] to-emerald-950">
+                        <span className="text-4xl md:text-5xl mb-3 animate-bounce">📢</span>
+                        <h3 className="text-2xl md:text-3xl font-black text-emerald-400 mb-2 drop-shadow-lg">홍보 배너 등록 문의</h3>
+                        <p className="text-sm md:text-base text-slate-300 font-bold bg-[#050a08]/80 px-5 py-2 rounded-full border border-emerald-900/50 mt-2">
+                          SOOP <span className="text-emerald-300 font-black">melonoff</span> 로 쪽지 부탁드립니다.
+                        </p>
+                      </div>
+                    ) : (
+                      <img src={item} alt={`홍보 배너 ${idx + 1}`} className="w-full h-full object-contain" />
+                    )}
+                  </div>
+                ))}
+                
+                {/* 💡 [추가] 좌우 매뉴얼 슬라이드 화살표 */}
+                {banners.length > 1 && (
+                  <>
+                    <button 
+                      onClick={handlePrevBanner} 
+                      className="absolute left-4 top-1/2 -translate-y-1/2 z-30 bg-black/50 hover:bg-emerald-500 text-white hover:text-black w-10 h-10 flex items-center justify-center rounded-full transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+                    >
+                      &#10094;
+                    </button>
+                    <button 
+                      onClick={handleNextBanner} 
+                      className="absolute right-4 top-1/2 -translate-y-1/2 z-30 bg-black/50 hover:bg-emerald-500 text-white hover:text-black w-10 h-10 flex items-center justify-center rounded-full transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+                    >
+                      &#10095;
+                    </button>
+
+                    {/* 💡 [변경] 하단 점(인디케이터) 클릭 기능 추가 */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20 bg-black/50 px-3 py-1.5 rounded-full">
+                      {banners.map((_, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => setCurrentBannerIdx(idx)}
+                          className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${idx === currentBannerIdx ? 'bg-white w-6 shadow-[0_0_5px_rgba(255,255,255,0.8)]' : 'bg-white/40 w-2 hover:bg-white/70'}`} 
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
+          </div>
+        )}
+
+        {activeTab === 'tourney' && (
+          <div className="animate-fadeIn space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <h2 className="text-3xl font-black text-white flex items-center gap-3"><span className="text-emerald-500">🏆</span> 진행 중인 대회 및 콘텐츠</h2>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="bg-[#0a120e] border border-blue-900/50 rounded-3xl p-6 shadow-2xl">
-                <h3 className="text-xl font-black text-blue-400 mb-5 pb-3 border-b border-blue-900/30 flex items-center gap-2">⚽ 미니 뿌드컵 {CURRENT_SEASON}</h3>
+                <h3 className="text-xl font-black text-blue-400 mb-5 pb-3 border-b border-blue-900/30 flex items-center gap-2">⚽ 미니 뿌드컵 <span className="text-sm font-bold bg-blue-900/40 px-2 py-0.5 rounded-full ml-1">{latestPpudcupSeason}</span></h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-blue-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-                  {sortTourney(ppudcup.filter(p => p.season === CURRENT_SEASON && p.name)).map(p => renderPlayer(p, 'tourney'))}
-                  {ppudcup.filter(p => p.season === CURRENT_SEASON && p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}
+                  {sortTourney(ppudcup.filter(p => p.season === latestPpudcupSeason && p.name)).map(p => renderPlayer(p, 'tourney'))}
+                  {ppudcup.filter(p => p.season === latestPpudcupSeason && p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}
                 </div>
               </div>
+
               <div className="bg-[#0a120e] border border-amber-900/50 rounded-3xl p-6 shadow-2xl">
-                <h3 className="text-xl font-black text-amber-400 mb-5 pb-3 border-b border-amber-900/30 flex items-center gap-2">🔥 미니 뿌챔스 {CURRENT_SEASON}</h3>
+                <h3 className="text-xl font-black text-amber-400 mb-5 pb-3 border-b border-amber-900/30 flex items-center gap-2">🔥 미니 뿌챔스 <span className="text-sm font-bold bg-amber-900/40 px-2 py-0.5 rounded-full ml-1">{latestPpuchampsSeason}</span></h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-                  {sortTourney(ppuchamps.filter(p => p.season === CURRENT_SEASON && p.name)).map(p => renderPlayer(p, 'tourney'))}
-                  {ppuchamps.filter(p => p.season === CURRENT_SEASON && p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}
+                  {sortTourney(ppuchamps.filter(p => p.season === latestPpuchampsSeason && p.name)).map(p => renderPlayer(p, 'tourney'))}
+                  {ppuchamps.filter(p => p.season === latestPpuchampsSeason && p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}
                 </div>
               </div>
-              <div className="bg-[#0a120e] border border-cyan-900/50 rounded-3xl p-6 shadow-2xl">
-                <h3 className="text-xl font-black text-cyan-400 mb-5 pb-3 border-b border-cyan-900/30 flex items-center gap-2">🌊 어인섬 도장깨기</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-cyan-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
-                  {fishman.filter(p => p.name).map(p => renderPlayer(p, 'fishman'))}
-                  {fishman.filter(p => p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}
-                </div>
-              </div>
+
               <div className="relative bg-[#0a120e] border border-purple-900/50 rounded-3xl p-6 shadow-2xl overflow-hidden">
-                <h3 className="text-xl font-black text-purple-400 mb-5 pb-3 border-b border-purple-900/30 flex items-center gap-2">🚧 미니 뿌로파 {CURRENT_SEASON}</h3>
-                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 ${!IS_PPUROPA_OPEN ? 'blur-[6px] opacity-40 select-none' : ''}`}>
-                  {sortTourney(ppuropa.filter(p => p.season === CURRENT_SEASON && p.name)).map(p => renderPlayer(p, 'tourney'))}
-                  {ppuropa.filter(p => p.season === CURRENT_SEASON && p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">데이터가 없습니다.</p>}
+                <h3 className="text-xl font-black text-purple-400 mb-5 pb-3 border-b border-purple-900/30 flex items-center gap-2">🚧 미니 뿌로파 <span className="text-sm font-bold bg-purple-900/40 px-2 py-0.5 rounded-full ml-1">{latestPpuropaSeason}</span></h3>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 ${!isPpuropaAutoOpen ? 'blur-[6px] opacity-40 select-none pointer-events-none' : ''}`}>
+                  {sortTourney(currentPpuropa).map(p => renderPlayer(p, 'tourney'))}
                 </div>
-                {!IS_PPUROPA_OPEN && (
+                {!isPpuropaAutoOpen && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#050a08]/50 z-10">
                     <span className="text-5xl mb-4 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">🔒</span>
                     <h4 className="text-2xl font-black text-purple-300">기획 단계입니다</h4>
                     <p className="text-sm font-bold text-purple-500/70 mt-2 tracking-widest">COMING SOON</p>
                   </div>
                 )}
+              </div>
+
+              <div className="bg-[#0a120e] border border-cyan-900/50 rounded-3xl p-6 shadow-2xl">
+                <h3 className="text-xl font-black text-cyan-400 mb-5 pb-3 border-b border-cyan-900/30 flex items-center gap-2">🌊 어인섬 도장깨기</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-cyan-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+                  {fishman.filter(p => p.name).map(p => renderPlayer(p, 'fishman'))}
+                  {fishman.filter(p => p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}
+                </div>
               </div>
             </div>
           </div>
@@ -481,7 +652,7 @@ export default function MKTOWNPage() {
         {activeTab === 'members' && (
           <section className="animate-fadeIn space-y-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2"><span className="text-emerald-500">✨</span> 전체 스트리머 명단 <span className="text-sm font-normal text-emerald-600/70 ml-2">(가나다순)</span></h2>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2"><span className="text-emerald-500">✨</span> FCO 스트리머 명단 <span className="text-sm font-normal text-emerald-600/70 ml-2">(가나다순)</span></h2>
               <span className="text-xs font-bold bg-[#050a08] px-4 py-1.5 rounded-full text-emerald-500 border border-emerald-900/50">총 {streamers.length}명</span>
             </div>
             <div className="bg-[#0a120e] border border-emerald-900/30 rounded-3xl p-6 shadow-lg">
@@ -490,7 +661,15 @@ export default function MKTOWNPage() {
                   <div key={s.id} onClick={() => { setSearchInput(s.fcoNickname); handleSearch(s.fcoNickname); setActiveTab('ranking'); }} className="group flex items-center gap-4 bg-[#050a08] p-3 rounded-2xl border border-emerald-900/20 hover:border-emerald-500/50 transition-all cursor-pointer">
                     <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} alt="profile" className="w-10 h-10 shrink-0 rounded-full border border-slate-700 object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                     <div className="flex flex-col flex-1 overflow-hidden">
-                      <div className="flex items-center gap-2"><span className="font-bold text-slate-200 group-hover:text-emerald-300 transition-colors truncate">{s.name}</span>{s.isLive && (<span className="shrink-0 flex items-center gap-1 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/50"><span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]"></span></span>)}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-200 group-hover:text-emerald-300 transition-colors truncate">{s.name}</span>
+                        {s.isLive && (
+                          <span className="shrink-0 flex items-center gap-1 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/50 shadow-[0_0_5px_rgba(239,68,68,0.2)]">
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]"></span>
+                            <span className="text-[8px] font-black text-red-500 tracking-wider mt-0.5">ON AIR</span>
+                          </span>
+                        )}
+                      </div>
                       <span className="text-slate-500 text-[10px] font-mono group-hover:text-emerald-600 transition-colors truncate">{s.fcoNickname}</span>
                     </div>
                   </div>
@@ -505,7 +684,6 @@ export default function MKTOWNPage() {
             <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-visible">
               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 rounded-l-2xl shadow-[0_0_15px_rgba(16,185,129,0.8)]"></div>
               
-              {/* 💡 [수정] 텍스트 "스트리머 및 구단주 전적 검색"으로 변경 */}
               <h2 className="text-lg font-bold text-emerald-300 mb-4 flex items-center gap-2 ml-2">
                 <span className="animate-pulse">🟢</span> 스트리머 및 구단주 전적 검색
               </h2>
@@ -689,18 +867,53 @@ export default function MKTOWNPage() {
 
         {activeTab === 'ladder' && (
           <div className="max-w-6xl mx-auto animate-fadeIn space-y-8">
-            <div className="bg-[#0a120e] border border-amber-900/50 rounded-3xl p-8 shadow-[0_0_40px_rgba(245,158,11,0.1)] relative overflow-hidden"><h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 mb-2 text-center">🪜 사다리 타기</h2>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 bg-[#050a08] p-4 rounded-2xl border border-amber-900/30">
-                <div className="flex items-center gap-4"><span className="text-amber-500 font-bold">인원 수 ({ladderCols}명)</span><div className="flex gap-2"><button onClick={() => setLadderCols(p => Math.max(2, p - 1))} className="w-10 h-10 rounded-full bg-amber-900/30 text-amber-400 hover:bg-amber-900/60 font-black text-xl flex items-center justify-center">-</button><button onClick={() => setLadderCols(p => Math.min(20, p + 1))} className="w-10 h-10 rounded-full bg-amber-900/30 text-amber-400 hover:bg-amber-900/60 font-black text-xl flex items-center justify-center">+</button></div></div>
-                <button onClick={generateLadder} className="px-8 py-3 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-[#050a08] font-black rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all">사다리 생성하기 🎲</button>
-              </div>
-              <div className="w-full overflow-x-auto pb-6 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-amber-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-[#050a08]">
-                <div style={{ minWidth: ladderCols > 8 ? `${ladderCols * 80}px` : '100%' }} className="relative px-2">
-                  <div className="flex justify-between mb-4 relative z-10">{Array.from({length: ladderCols}).map((_, i) => (<div key={`p-${i}`} className="flex-1 px-1 flex justify-center"><div className="flex flex-col gap-2 w-full max-w-[90px]"><input type="text" className="w-full text-center text-xs md:text-sm font-bold bg-[#050812] border-2 border-amber-900/50 hover:border-amber-500/50 rounded-lg py-1.5 text-slate-200" value={ladderPlayers[i] || ''} onChange={(e) => { const newP = [...ladderPlayers]; newP[i] = e.target.value; setLadderPlayers(newP); }} placeholder={`참가${i+1}`} /><button onClick={() => traceLadder(i)} className={`w-full py-1.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${ladderPath && ladderPath[0].x === i ? 'bg-amber-500 text-amber-950 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-amber-900/30 text-amber-500 hover:bg-amber-400 hover:text-amber-950 border border-amber-900/50'}`}>START</button></div></div>))}</div>
-                  <div className="relative h-[450px] w-full bg-[#050812] border border-amber-900/30 rounded-2xl overflow-hidden shadow-inner">{ladderLines.length === 0 ? (<div className="absolute inset-0 flex items-center justify-center text-amber-900/50 font-black text-2xl tracking-widest">생성 버튼을 눌러주세요</div>) : (<svg viewBox="0 0 1000 1000" className="w-full h-full" preserveAspectRatio="none">{Array.from({length: ladderCols}).map((_, c) => ( <line key={`v-${c}`} x1={getX(c)} y1={0} x2={getX(c)} y2={SVG_H} stroke="#451a03" strokeWidth="6" /> ))}{ladderLines.map((rowArr, r) => rowArr.map((hasLine, c) => hasLine && ( <line key={`h-${r}-${c}`} x1={getX(c)} y1={getY(r+1)} x2={getX(c+1)} y2={getY(r+1)} stroke="#451a03" strokeWidth="6" /> )) )}{ladderPath && (<polyline key={ladderAnimKey} points={ladderPath.map(p => `${getX(p.x)},${getY(p.y)}`).join(' ')} fill="none" stroke="#fbbf24" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 30000, strokeDashoffset: 30000, animation: 'drawLineAnimation 3s linear forwards' }} />)}</svg>)}</div>
-                  <div className="flex justify-between mt-4 relative z-10">{Array.from({length: ladderCols}).map((_, i) => (<div key={`r-${i}`} className="flex-1 px-1 flex justify-center"><input type="text" className={`w-full max-w-[90px] text-center text-xs md:text-sm font-bold bg-[#050a08] border-2 rounded-lg py-2 transition-all ${ladderEndIdx === i ? 'border-red-500 text-red-400 bg-red-950/30 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-110' : 'border-amber-900/50 text-slate-400'}`} value={ladderResults[i] || ''} onChange={(e) => { const newR = [...ladderResults]; newR[i] = e.target.value; setLadderResults(newR); }} placeholder={`결과${i+1}`} /></div>))}</div>
+            <div className="bg-[#0a120e] border border-amber-900/50 rounded-3xl p-8 shadow-[0_0_40px_rgba(245,158,11,0.1)] relative overflow-hidden">
+              <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 mb-2 text-center">🪜 사다리 타기</h2>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 bg-[#050a08] p-4 rounded-2xl border border-amber-900/30 flex-wrap">
+                <div className="flex items-center gap-4">
+                  <span className="text-amber-500 font-bold">인원 수 ({ladderCols}명)</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setLadderCols(p => Math.max(2, p - 1))} className="w-10 h-10 rounded-full bg-amber-900/30 text-amber-400 hover:bg-amber-900/60 font-black text-xl flex items-center justify-center">-</button>
+                    <button onClick={() => setLadderCols(p => Math.min(20, p + 1))} className="w-10 h-10 rounded-full bg-amber-900/30 text-amber-400 hover:bg-amber-900/60 font-black text-xl flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 flex-wrap justify-center">
+                  <button onClick={generateLadder} className="px-6 py-2 bg-gradient-to-r from-amber-600 to-orange-500 text-[#050a08] font-black rounded-xl hover:from-amber-500 hover:to-orange-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    🎲 사다리 생성
+                  </button>
+                  <button onClick={handleShowAllLadderResults} className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 text-[#050a08] font-black rounded-xl hover:from-emerald-500 hover:to-teal-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    📊 전체결과
+                  </button>
+                  <button onClick={handleResetLadder} className="px-6 py-2 bg-slate-800 text-slate-300 font-black rounded-xl hover:bg-slate-700 transition-all border border-slate-700">
+                    🔄 초기화
+                  </button>
                 </div>
               </div>
+
+              <div className="w-full overflow-x-auto pb-6 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-amber-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-[#050a08]">
+                <div style={{ minWidth: ladderCols > 8 ? `${ladderCols * 80}px` : '100%' }} className="relative px-2">
+                  <div className="flex justify-between mb-4 relative z-10">{Array.from({length: ladderCols}).map((_, i) => (<div key={`p-${i}`} className="flex-1 px-1 flex justify-center"><div className="flex flex-col gap-2 w-full max-w-[90px]"><input type="text" className="w-full text-center text-xs md:text-sm font-bold bg-[#050812] border-2 border-amber-900/50 hover:border-amber-500/50 rounded-lg py-1.5 text-slate-200 focus:outline-none focus:border-amber-500" value={ladderPlayers[i] || ''} onChange={(e) => { const newP = [...ladderPlayers]; newP[i] = e.target.value; setLadderPlayers(newP); }} placeholder={`참가${i+1}`} /><button onClick={() => traceLadder(i)} className={`w-full py-1.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${ladderPath && ladderPath[0].x === i ? 'bg-amber-500 text-amber-950 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-amber-900/30 text-amber-500 hover:bg-amber-400 hover:text-amber-950 border border-amber-900/50'}`}>START</button></div></div>))}</div>
+                  <div className="relative h-[450px] w-full bg-[#050812] border border-amber-900/30 rounded-2xl overflow-hidden shadow-inner">{ladderLines.length === 0 ? (<div className="absolute inset-0 flex items-center justify-center text-amber-900/50 font-black text-2xl tracking-widest">생성 버튼을 눌러주세요</div>) : (<svg viewBox="0 0 1000 1000" className="w-full h-full" preserveAspectRatio="none">{Array.from({length: ladderCols}).map((_, c) => ( <line key={`v-${c}`} x1={getX(c)} y1={0} x2={getX(c)} y2={SVG_H} stroke="#451a03" strokeWidth="6" /> ))}{ladderLines.map((rowArr, r) => rowArr.map((hasLine, c) => hasLine && ( <line key={`h-${r}-${c}`} x1={getX(c)} y1={getY(r+1)} x2={getX(c+1)} y2={getY(r+1)} stroke="#451a03" strokeWidth="6" /> )) )}{ladderPath && (<polyline key={ladderAnimKey} points={ladderPath.map(p => `${getX(p.x)},${getY(p.y)}`).join(' ')} fill="none" stroke="#fbbf24" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 30000, strokeDashoffset: 30000, animation: 'drawLineAnimation 1.5s linear forwards' }} />)}</svg>)}</div>
+                  <div className="flex justify-between mt-4 relative z-10">{Array.from({length: ladderCols}).map((_, i) => (<div key={`r-${i}`} className="flex-1 px-1 flex justify-center"><input type="text" className={`w-full max-w-[90px] text-center text-xs md:text-sm font-bold bg-[#050a08] border-2 rounded-lg py-2 transition-all focus:outline-none focus:border-amber-500 ${ladderEndIdx === i ? 'border-red-500 text-red-400 bg-red-950/30 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-110' : 'border-amber-900/50 text-slate-400'}`} value={ladderResults[i] || ''} onChange={(e) => { const newR = [...ladderResults]; newR[i] = e.target.value; setLadderResults(newR); }} placeholder={`결과${i+1}`} /></div>))}</div>
+                </div>
+              </div>
+
+              {ladderAllResults && (
+                <div className="mt-8 bg-[#050a08] p-6 rounded-2xl border border-emerald-900/50 animate-fadeIn">
+                  <h3 className="text-xl font-black text-emerald-400 mb-4 text-center">📊 전체 사다리 결과</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {ladderAllResults.map((res, i) => (
+                      <div key={i} className="flex items-center justify-between bg-[#0a120e] p-3 rounded-xl border border-emerald-900/30">
+                        <span className="text-slate-300 font-bold truncate flex-1">{res.player}</span>
+                        <span className="text-slate-500 mx-2">➔</span>
+                        <span className="text-emerald-400 font-black shrink-0">{res.result}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
