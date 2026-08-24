@@ -165,7 +165,8 @@ export default function MKTOWNPage() {
 
   const fetchNexonAPI = async (endpoint: string, retries = 3): Promise<any> => {
     try {
-      const res = await fetch(`/api/nexon?endpoint=${encodeURIComponent(endpoint)}&_t=${Date.now()}`);
+      // 🚀 [캐싱 방어 마법 1] 강제로 캐시를 파괴하는 시간 꼬리표(_t=...)를 지워버립니다!
+      const res = await fetch(`/api/nexon?endpoint=${encodeURIComponent(endpoint)}`);
       if (!res.ok) throw new Error(`API Error ${res.status}`);
       return await res.json();
     } catch (err) {
@@ -221,8 +222,8 @@ export default function MKTOWNPage() {
 
       if (Array.isArray(cusMatchIds) && cusMatchIds.length > 0) {
         setLoadingText('커스텀 1on1 데이터 로드 중 (캐시 확인)...');
-        // 🚀 [2단계 적용] 5에서 15로 늘려서 한 번에 더 많이 가져오기!
-        const chunkSize = 15; 
+        // 안정성이 검증된 5개씩 100ms 쉬는 로직 그대로 유지
+        const chunkSize = 5; 
         for (let i = 0; i < cusMatchIds.length; i += chunkSize) {
           if (apiLimitReached) break;
           const chunk = cusMatchIds.slice(i, i + chunkSize);
@@ -234,8 +235,10 @@ export default function MKTOWNPage() {
 
               for (let attempt = 0; attempt < 3; attempt++) {
                 try {
-                  const url = `/api/nexon?endpoint=${encodeURIComponent(`/fconline/v1/match-detail?matchid=${id}`)}&_t=${Date.now()}`;
-                  const r = await fetch(url, { cache: 'no-store' });
+                  // 🚀 [캐싱 방어 마법 2] 매번 서버에 새로 묻는 no-store와 꼬리표를 제거했습니다!
+                  // 이제 Vercel의 CDN(가장자리 캐시)이 일을 대신 해줍니다.
+                  const url = `/api/nexon?endpoint=${encodeURIComponent(`/fconline/v1/match-detail?matchid=${id}`)}`;
+                  const r = await fetch(url);
                   if (r.status === 429 || r.status === 403) { apiLimitReached = true; return null; }
                   if (!r.ok) return null;
                   const data = await r.json();
@@ -248,8 +251,7 @@ export default function MKTOWNPage() {
           );
           matchDetails.push(...chunkResults.filter(r => r !== null));
           setProgress(35 + Math.floor(((i + chunkSize) / cusMatchIds.length) * 60));
-          // 🚀 [3단계 적용] 100ms 쉬던 걸 50ms로 단축해서 더 빨리 넘어가기!
-          await new Promise(res => setTimeout(res, 50)); 
+          await new Promise(res => setTimeout(res, 100)); 
         }
       }
 
@@ -302,7 +304,6 @@ export default function MKTOWNPage() {
         }
       });
 
-      // 💡 [수정] 평균 실점 및 수비 효율 계산 로직
       const calcAvgGA = validMatches > 0 ? (totalGA / validMatches) : 0;
 
       setCusStats({
@@ -314,7 +315,7 @@ export default function MKTOWNPage() {
         avgPossession: validMatches > 0 ? Math.round(totalPossession / validMatches) : 0,
         shootAccuracy: totalShoot > 0 ? Math.round((totalEffectiveShoot / totalShoot) * 100) : 0,
         passAccuracy: totalPassTry > 0 ? Math.round((totalPassSuccess / totalPassTry) * 100) : 0,
-        defenseEfficiency: validMatches > 0 ? Math.max(0, 100 - Math.round((calcAvgGA / 3.0) * 100)) : 0, // 👈 3실점 이상 0점, 0실점 100점으로 환산하는 수비 효율
+        defenseEfficiency: validMatches > 0 ? Math.max(0, 100 - Math.round((calcAvgGA / 3.0) * 100)) : 0, // 수비 효율 환산 (3실점 0점)
       });
 
       setNexonBasic(dataBasic);
@@ -329,14 +330,13 @@ export default function MKTOWNPage() {
     finally { setTimeout(() => { setIsLoading(false); setLoadingText(''); setProgress(0); }, 500); }
   };
 
-  // 💡 [수비 효율 반영된] 육각형 레이더 차트 렌더링 함수
   const renderRadarChart = () => {
     if (!cusStats || cusStats.total === 0) return null;
     
     const winRate = cusStats.winRate; 
     const attack = Math.min(100, Math.round((cusStats.avgGF / 3.0) * 100)); 
     const pass = cusStats.passAccuracy; 
-    const defense = cusStats.defenseEfficiency; // 👈 수비력을 '수비 효율'로 적용!
+    const defense = cusStats.defenseEfficiency; // 수비 효율 적용
     const possession = Math.min(100, Math.max(0, Math.round((cusStats.avgPossession - 35) * 3.33))); 
     const shoot = cusStats.shootAccuracy; 
 
@@ -380,7 +380,6 @@ export default function MKTOWNPage() {
           })}
         </svg>
 
-        {/* 💡 하단 설명 (범례) - 수비 효율 반영 */}
         <div className="w-full mt-4 bg-[#050a08] p-4 rounded-xl border border-emerald-900/30">
           <p className="text-[10px] text-emerald-500 font-bold mb-2 flex items-center gap-1"><span>💡</span> 육각형 지표 설명</p>
           <div className="grid grid-cols-2 gap-y-2 gap-x-4">
@@ -718,7 +717,7 @@ export default function MKTOWNPage() {
               </div>
 
               <div className="bg-[#0a120e] border border-cyan-900/50 rounded-3xl p-6 shadow-2xl">
-                <h3 className="text-xl font-black text-cyan-400 mb-5 pb-3 border-b border-cyan-900/30 flex items-center gap-2">🌊 어인섬 도장깨기</h3>
+                <h3 className="text-xl font-black text-cyan-400 mb-5 pb-3 border-b border-cyan-900/30 flex items-center gap-2">🌊 어인섬 도장깨기(수산시장)</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-cyan-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                   {fishman.filter(p => p.name).map(p => renderPlayer(p, 'fishman'))}
                   {fishman.filter(p => p.name).length === 0 && <p className="text-slate-500 text-sm py-4 col-span-2 text-center">진행 중인 데이터가 없습니다.</p>}

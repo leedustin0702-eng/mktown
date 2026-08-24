@@ -8,43 +8,39 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Endpoint is required' }, { status: 400 });
   }
 
-  const API_KEY = process.env.NEXON_API_KEY;
-
-  if (!API_KEY) {
-    return NextResponse.json(
-      { error: 'NEXON_API_KEY가 설정되지 않았습니다.' },
-      { status: 500 }
-    );
-  }
-
-  const targetUrl = `https://open.api.nexon.com${endpoint}`;
+  // 💡 기존에 설정해두신 환경변수 이름 그대로 쓰시면 됩니다!
+  const API_KEY = process.env.NEXON_API_KEY || process.env.NEXT_PUBLIC_NEXON_API_KEY || '';
 
   try {
-    const res = await fetch(targetUrl, {
+    const nexonUrl = `https://open.api.nexon.com${endpoint}`;
+    const res = await fetch(nexonUrl, {
       headers: { 'x-nxopen-api-key': API_KEY },
     });
 
     if (!res.ok) {
-      const detail = await res.text();
-      // 진단용: 넥슨에 실제로 보낸 주소와 서버가 받은 endpoint를 함께 노출
-      return NextResponse.json(
-        {
-          error: 'Nexon API Error',
-          nexonStatus: res.status,
-          receivedEndpoint: endpoint,
-          targetUrl,
-          detail,
-        },
-        { status: res.status }
-      );
+      throw new Error(`Nexon API error: ${res.status}`);
     }
 
     const data = await res.json();
-    return NextResponse.json(data);
+
+    // 🌟 [핵심 캐싱 마법] 데이터 종류에 따라 캐시 유통기한을 다르게 설정합니다.
+    let sMaxAge = 300; // 기본은 300초(5분) 유지
+
+    // '경기 상세 정보'는 과거 기록이라 영원히 안 바뀌므로 1년(31536000초) 캐싱!
+    // 이렇게 하면 100번 조회 중 겹치는 경기는 서버 요금을 아예 갉아먹지 않습니다.
+    if (endpoint.includes('/match-detail')) {
+      sMaxAge = 31536000; 
+    }
+
+    return NextResponse.json(data, {
+      headers: {
+        // Vercel CDN(가장자리 서버) 캐싱 설정:
+        // s-maxage 동안 캐시 유지, stale-while-revalidate로 유저 몰래 뒤에서 최신 데이터 갱신
+        'Cache-Control': `public, s-maxage=${sMaxAge}, stale-while-revalidate=59`
+      }
+    });
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch', targetUrl, detail: String(error) },
-      { status: 500 }
-    );
+    console.error(error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
