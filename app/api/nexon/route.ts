@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// 🚀 [핵심 마법 1] Next.js 자체의 지독한 '화석 캐시(영구 저장)'를 강제로 박살냅니다!
+// 🚀 Next.js 자체의 '화석 캐시(영구 저장)'를 막는 필수 방어막 (유지)
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   try {
     const nexonUrl = `https://open.api.nexon.com${endpoint}`;
     
-    // 🚀 [핵심 마법 2] 서버 내부 캐시는 끄고(no-store), Vercel 겉면(CDN) 캐시만 씁니다!
+    // 서버 내부 캐시는 끄고(no-store), Vercel 겉면(CDN) 캐시만 씁니다!
     const res = await fetch(nexonUrl, {
       headers: { 'x-nxopen-api-key': API_KEY },
       cache: 'no-store', 
@@ -28,18 +28,18 @@ export async function GET(request: Request) {
 
     const data = await res.json();
 
-    // 🌟 기본 데이터(매치 리스트, 랭크 등)는 답답하지 않게 60초(1분)로 대폭 축소!
-    let sMaxAge = 60; 
+    // 🌟 [황금 밸런스 복구] 구단주님 통찰력대로 기본 5분(300초)으로 세팅!
+    let sMaxAge = 300; 
 
-    // 매치 상세 정보(누가 골 넣었나 등 과거 기록)는 영원히 안 바뀌므로 1년(31536000초) 캐싱
+    // 매치 상세 정보(누가 골 넣었나 등 과거 기록)는 영원히 안 바뀌므로 1년(31536000초) 캐싱 (유지)
     if (endpoint.includes('/match-detail')) {
       sMaxAge = 31536000; 
     }
 
     return NextResponse.json(data, {
       headers: {
-        // max-age=0 : 브라우저(크롬) 자체 캐시 차단 (항상 서버에 묻도록)
-        // s-maxage=... : Vercel 무료 CDN 진열장만 똑똑하게 활용!
+        // max-age=0 : 브라우저(크롬) 자체 캐시 차단
+        // s-maxage=300 : Vercel 무료 CDN이 5분 동안 완벽하게 요금을 방어해 줌!
         'Cache-Control': `public, max-age=0, s-maxage=${sMaxAge}, stale-while-revalidate=59`
       }
     });
