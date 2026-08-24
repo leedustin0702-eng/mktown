@@ -255,6 +255,7 @@ export default function MKTOWNPage() {
       setProgress(95);
 
       let wins = 0, draws = 0, losses = 0, totalGF = 0, totalGA = 0, totalPossession = 0, validMatches = 0;
+      let totalShoot = 0, totalEffectiveShoot = 0, totalPassTry = 0, totalPassSuccess = 0;
       const h2hMap: Record<string, H2HStat> = {};
       const logs: MatchLog[] = [];
 
@@ -267,6 +268,11 @@ export default function MKTOWNPage() {
         const res = myInfo.matchDetail.matchResult;
         const myScore = myInfo.shoot.goalTotal;
         const oppScore = oppInfo.shoot.goalTotal;
+
+        totalShoot += myInfo.shoot?.shootTotal || 0;
+        totalEffectiveShoot += myInfo.shoot?.effectiveShootTotal || 0;
+        totalPassTry += myInfo.pass?.passTry || 0;
+        totalPassSuccess += myInfo.pass?.passSuccess || 0;
         
         const utcDateStr = match.matchDate.endsWith('Z') ? match.matchDate : match.matchDate + 'Z';
         const d = new Date(utcDateStr);
@@ -297,7 +303,9 @@ export default function MKTOWNPage() {
       setCusStats({
         total: validMatches, wins, draws, losses, winRate: validMatches > 0 ? Math.round((wins / validMatches) * 100) : 0,
         avgGF: validMatches > 0 ? (totalGF / validMatches).toFixed(1) : 0, avgGA: validMatches > 0 ? (totalGA / validMatches).toFixed(1) : 0,
-        avgPossession: validMatches > 0 ? Math.round(totalPossession / validMatches) : 0
+        avgPossession: validMatches > 0 ? Math.round(totalPossession / validMatches) : 0,
+        shootAccuracy: totalShoot > 0 ? Math.round((totalEffectiveShoot / totalShoot) * 100) : 0,
+        passAccuracy: totalPassTry > 0 ? Math.round((totalPassSuccess / totalPassTry) * 100) : 0,
       });
 
       setNexonBasic(dataBasic);
@@ -310,6 +318,73 @@ export default function MKTOWNPage() {
 
     } catch (e) { console.error(e); alert("데이터 로드 실패."); }
     finally { setTimeout(() => { setIsLoading(false); setLoadingText(''); setProgress(0); }, 500); }
+  };
+
+  // 💡 [추가] 육각형 레이더 차트 렌더링 함수
+  const renderRadarChart = () => {
+    if (!cusStats || cusStats.total === 0) return null;
+    
+    const winRate = cusStats.winRate; 
+    const attack = Math.min(100, Math.round((cusStats.avgGF / 3.0) * 100)); 
+    const pass = cusStats.passAccuracy; 
+    const defense = Math.max(0, 100 - Math.round((cusStats.avgGA / 2.5) * 100)); 
+    const possession = Math.min(100, Math.max(0, Math.round((cusStats.avgPossession - 35) * 3.33))); 
+    const shoot = cusStats.shootAccuracy; 
+
+    const data = [
+      { label: '승부사', val: winRate }, { label: '공격력', val: attack }, { label: '빌드업', val: pass },
+      { label: '수비력', val: defense }, { label: '지배력', val: possession }, { label: '결정력', val: shoot }
+    ];
+
+    const cx = 120, cy = 120, maxR = 80;
+    const getPoint = (val: number, idx: number) => {
+      const angle = idx * 60 - 90; 
+      const rad = (angle * Math.PI) / 180;
+      const r = (val / 100) * maxR;
+      return `${cx + r * Math.cos(rad)},${cy + r * Math.sin(rad)}`;
+    };
+
+    const polygonPoints = data.map((d, i) => getPoint(d.val, i)).join(' ');
+
+    return (
+      <div className="flex flex-col items-center">
+        <svg width="240" height="240" viewBox="0 0 240 240" className="drop-shadow-xl">
+          {[0.2, 0.4, 0.6, 0.8, 1].map((scale, i) => (
+            <polygon key={`bg-${i}`} points={data.map((_, idx) => getPoint(100 * scale, idx)).join(' ')} fill="none" stroke="#064e3b" strokeWidth="1" opacity="0.5" />
+          ))}
+          {data.map((_, idx) => (
+            <line key={`axis-${idx}`} x1={cx} y1={cy} x2={getPoint(100, idx).split(',')[0]} y2={getPoint(100, idx).split(',')[1]} stroke="#064e3b" strokeWidth="1" opacity="0.5" />
+          ))}
+          <polygon points={polygonPoints} fill="rgba(16, 185, 129, 0.3)" stroke="#34d399" strokeWidth="2" filter="drop-shadow(0 0 8px rgba(16,185,129,0.5))" className="transition-all duration-1000" />
+          {data.map((d, idx) => (
+            <circle key={`dot-${idx}`} cx={getPoint(d.val, idx).split(',')[0]} cy={getPoint(d.val, idx).split(',')[1]} r="4" fill="#6ee7b7" />
+          ))}
+          {data.map((d, idx) => {
+            const angle = idx * 60 - 90;
+            const rad = (angle * Math.PI) / 180;
+            const r = maxR + 20;
+            return (
+              <text key={`label-${idx}`} x={cx + r * Math.cos(rad)} y={cy + r * Math.sin(rad) + 4} textAnchor="middle" fill="#6ee7b7" fontSize="12" fontWeight="900" className="drop-shadow-md">
+                {d.label}
+              </text>
+            );
+          })}
+        </svg>
+
+        {/* 💡 하단 설명 (범례) */}
+        <div className="w-full mt-4 bg-[#050a08] p-4 rounded-xl border border-emerald-900/30">
+          <p className="text-[10px] text-emerald-500 font-bold mb-2 flex items-center gap-1"><span>💡</span> 육각형 지표 설명</p>
+          <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">승부사:</strong> 전체 승률(%)</div>
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">공격력:</strong> 평균 득점</div>
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">결정력:</strong> 유효 슈팅 비율(%)</div>
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">빌드업:</strong> 패스 성공률(%)</div>
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">지배력:</strong> 평균 볼 점유율(%)</div>
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">수비력:</strong> 평균 실점</div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const goHome = () => { setActiveTab('home'); setSearchResult(null); setNexonRank(null); setNexonBasic(null); setH2hData([]); setSearchInput(''); };
@@ -415,7 +490,6 @@ export default function MKTOWNPage() {
   const currentPpuropa = ppuropa.filter(p => p.season === latestPpuropaSeason && p.name);
   const isPpuropaAutoOpen = currentPpuropa.length > 0;
 
-  // 💡 [수정] "김민교." 로 시트지의 정확한 이름을 찾습니다!
   const minkyoData = streamers.find(s => s.name === '김민교.');
   const isMinkyoLive = minkyoData?.isLive || false;
 
@@ -731,7 +805,11 @@ export default function MKTOWNPage() {
 
             {searchResult && (
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 animate-fadeIn">
+                
+                {/* 🟢 좌측 열: 프로필 + 1on1 요약 + 육각형 전력 분석 차트 */}
                 <div className="xl:col-span-1 space-y-6">
+                  
+                  {/* 프로필 박스 */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl relative">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#050a08] ring-2 ring-emerald-500 bg-slate-800 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                       <img src={searchResult.soopId ? `https://stimg.afreecatv.com/LOGO/${searchResult.soopId.substring(0, 2)}/${searchResult.soopId}/${searchResult.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
@@ -749,23 +827,38 @@ export default function MKTOWNPage() {
                     ) : ( <div className="w-full h-20 bg-emerald-900/10 mt-6 rounded-2xl animate-pulse"></div> )}
                   </div>
 
+                  {/* 1on1 요약 박스 */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 shadow-2xl">
                     <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span className="text-emerald-500">📊</span> 커스텀 1on1 요약</h3>
                     {cusStats ? (
                        cusStats.total > 0 ? (
-                        <div className="space-y-5">
-                          <div className="flex justify-between items-center bg-[#050a08] p-4 rounded-2xl border border-emerald-900/30">
-                            <div className="text-center"><p className="text-slate-500 text-[10px] mb-1">전적 ({cusStats.total}전)</p><p className="text-emerald-400 font-black text-lg">{cusStats.wins}승 {cusStats.draws}무 {cusStats.losses}패</p></div>
-                            <div className="h-10 w-px bg-emerald-900/50"></div>
-                            <div className="text-center"><p className="text-slate-500 text-[10px] mb-1">승률</p><p className="text-white font-black text-2xl">{cusStats.winRate}<span className="text-sm text-emerald-500">%</span></p></div>
-                          </div>
+                        <div className="flex justify-between items-center bg-[#050a08] p-4 rounded-2xl border border-emerald-900/30">
+                          <div className="text-center"><p className="text-slate-500 text-[10px] mb-1">전적 ({cusStats.total}전)</p><p className="text-emerald-400 font-black text-lg">{cusStats.wins}승 {cusStats.draws}무 {cusStats.losses}패</p></div>
+                          <div className="h-10 w-px bg-emerald-900/50"></div>
+                          <div className="text-center"><p className="text-slate-500 text-[10px] mb-1">승률</p><p className="text-white font-black text-2xl">{cusStats.winRate}<span className="text-sm text-emerald-500">%</span></p></div>
                         </div>
                       ) : (<p className="text-slate-500 text-sm text-center py-6">경기 데이터가 없습니다.</p>)
                     ) : (<div className="w-full h-24 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
+
+                  {/* 🌟 [NEW] 커스텀 1on1 요약 바로 밑에 추가된 육각형 전력 분석 차트 */}
+                  <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 shadow-2xl">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span className="text-emerald-500">🕸️</span> 전력 분석 차트</h3>
+                    {cusStats && cusStats.total > 0 ? (
+                      renderRadarChart()
+                    ) : (
+                      <div className="w-full h-64 bg-emerald-900/10 rounded-2xl flex items-center justify-center">
+                        <p className="text-slate-500 text-sm">데이터 부족</p>
+                      </div>
+                    )}
+                  </div>
+                  
                 </div>
 
+                {/* 🟢 우측 열: 최근 경기 로그 + 원래 형태의 시트 멤버 상대전적 */}
                 <div className="xl:col-span-2 space-y-6">
+                  
+                  {/* 최근 경기 로그 박스 */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 md:p-8 shadow-2xl">
                     <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2 border-b border-emerald-900/30 pb-3"><span className="text-emerald-500">📝</span> 최근 경기 로그</h3>
                     {cusStats ? (
@@ -786,6 +879,7 @@ export default function MKTOWNPage() {
                     ) : (<div className="w-full h-40 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
 
+                  {/* 💡 [원래 형태 유지] 우측 하단에 위치하던 시트 멤버 상대전적 (그리드 형태) */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 md:p-8 shadow-2xl">
                     <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2 border-b border-emerald-900/30 pb-3"><span className="text-emerald-500">⚔️</span> 시트 멤버 상대전적</h3>
                     {cusStats ? (
@@ -818,6 +912,7 @@ export default function MKTOWNPage() {
                     ) : (<div className="w-full h-40 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
                 </div>
+
               </div>
             )}
           </div>
