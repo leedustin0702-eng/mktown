@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // ==========================================
 // ⚙️ 콘텐츠 설정 스위치
@@ -14,6 +14,7 @@ const CSV_PPUCHAMPS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJ
 const CSV_FISHMAN = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1716437779&single=true&output=csv";
 const CSV_PPUROPA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1339520970&single=true&output=csv";
 const CSV_NOTICE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1640060087&single=true&output=csv";
+const CSV_FCO_BOARD = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=1509458439&single=true&output=csv";
 const CSV_BANNER = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQOygdnJy5ZHfvRUhFGepi8kshPOHWnlfAMqopg5P3ihGsJYHjVoYDNhMf25o-QtPYxcEfA5_JFKGm/pub?gid=846801615&single=true&output=csv";
 // ==========================================
 
@@ -44,10 +45,17 @@ const getLatestSeason = (data: any[]) => {
 export default function MKTOWNPage() {
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [notices, setNotices] = useState<any[]>([]); 
+  
+  const [fcoBoardNotices, setFcoBoardNotices] = useState<string[]>([]);
+  const [currentBoardIdx, setCurrentBoardIdx] = useState<number>(0);
+  const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
+
   const [banners, setBanners] = useState<string[]>([]);
   const [currentBannerIdx, setCurrentBannerIdx] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [logoError, setLogoError] = useState<boolean>(false);
+
+  const scrollRef = useRef<HTMLDivElement>(null); 
 
   const [ppudcup, setPpudcup] = useState<any[]>([]);
   const [ppuchamps, setPpuchamps] = useState<any[]>([]);
@@ -91,62 +99,91 @@ export default function MKTOWNPage() {
   const [ladderAnimKey, setLadderAnimKey] = useState<number>(0);
   const [ladderAllResults, setLadderAllResults] = useState<{player: string, result: string}[] | null>(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      const parseCSV = (text: string) => {
-        const rows = text.split('\n').map((row) => row.trim()).filter(Boolean);
-        rows.shift();
-        return rows.map(row => row.split(',').map(c => c.trim().replace(/\r$/, '')));
-      };
+  const fetchSheetData = useCallback(async () => {
+    const parseCSV = (text: string) => {
+      const rows = text.split('\n').map((row) => row.trim()).filter(Boolean);
+      rows.shift();
+      return rows.map(row => row.split(',').map(c => c.trim().replace(/\r$/, '')));
+    };
 
-      try {
-        const [resMain, resCup, resChamps, resFish, resRopa, resNotice, resBanner] = await Promise.all([
-          fetch(CSV_MAIN, { cache: 'no-store' }),
-          fetch(CSV_PPUDCUP, { cache: 'no-store' }),
-          fetch(CSV_PPUCHAMPS, { cache: 'no-store' }),
-          fetch(CSV_FISHMAN, { cache: 'no-store' }),
-          fetch(CSV_PPUROPA, { cache: 'no-store' }),
-          fetch(CSV_NOTICE, { cache: 'no-store' }).catch(() => null),
-          fetch(CSV_BANNER, { cache: 'no-store' }).catch(() => null)
-        ]);
+    try {
+      const timestamp = new Date().getTime();
+      const [resMain, resCup, resChamps, resFish, resRopa, resNotice, resFcoBoard, resBanner] = await Promise.all([
+        fetch(`${CSV_MAIN}&t=${timestamp}`, { cache: 'no-store' }),
+        fetch(`${CSV_PPUDCUP}&t=${timestamp}`, { cache: 'no-store' }),
+        fetch(`${CSV_PPUCHAMPS}&t=${timestamp}`, { cache: 'no-store' }),
+        fetch(`${CSV_FISHMAN}&t=${timestamp}`, { cache: 'no-store' }),
+        fetch(`${CSV_PPUROPA}&t=${timestamp}`, { cache: 'no-store' }),
+        fetch(`${CSV_NOTICE}&t=${timestamp}`, { cache: 'no-store' }).catch(() => null),
+        fetch(`${CSV_FCO_BOARD}&t=${timestamp}`, { cache: 'no-store' }).catch(() => null),
+        fetch(`${CSV_BANNER}&t=${timestamp}`, { cache: 'no-store' }).catch(() => null)
+      ]);
 
-        const mainRows = parseCSV(await resMain.text());
-        const data = mainRows.map((cols, index) => {
-          let rawTier = cols[3] || '티어 미정';
-          if (!rawTier.includes('티어') && rawTier.trim() !== '') rawTier = rawTier + '티어';
-          const isLiveStr = cols[4] ? cols[4].toUpperCase() : '';
-          const isCurrentlyLive = isLiveStr === 'ON' || isLiveStr === 'O' || isLiveStr === 'TRUE';
-          return {
-            id: index + 1, name: cols[0] || '이름 없음', soopId: cols[1] || '아이디 없음', 
-            fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, viewers: 0,
-          };
-        });
-        setStreamers(data);
+      const mainRows = parseCSV(await resMain.text());
+      const data = mainRows.map((cols, index) => {
+        let rawTier = cols[3] || '티어 미정';
+        if (!rawTier.includes('티어') && rawTier.trim() !== '') rawTier = rawTier + '티어';
+        const isLiveStr = cols[4] ? cols[4].toUpperCase() : '';
+        const isCurrentlyLive = isLiveStr === 'ON' || isLiveStr === 'O' || isLiveStr === 'TRUE';
+        return {
+          id: index + 1, name: cols[0] || '이름 없음', soopId: cols[1] || '아이디 없음', 
+          fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, viewers: 0,
+        };
+      });
+      setStreamers(data);
 
-        setPpudcup(parseCSV(await resCup.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
-        setPpuchamps(parseCSV(await resChamps.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
-        setPpuropa(parseCSV(await resRopa.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
-        setFishman(parseCSV(await resFish.text()).map(c => ({ name: c[0], step: c[1] })));
-        
-        if(resNotice && resNotice.ok) {
-           const noticeData = parseCSV(await resNotice.text());
-           if(noticeData.length > 0) {
-             setNotices(noticeData.map(c => ({ date: c[0], tag: c[1], title: c[2] })));
-           } else { setNotices([]); }
-        }
+      setPpudcup(parseCSV(await resCup.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
+      setPpuchamps(parseCSV(await resChamps.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
+      setPpuropa(parseCSV(await resRopa.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
+      setFishman(parseCSV(await resFish.text()).map(c => ({ name: c[0], step: c[1] })));
+      
+      if(resNotice && resNotice.ok) {
+         const noticeData = parseCSV(await resNotice.text());
+         if(noticeData.length > 0) {
+           setNotices(noticeData.map(c => ({ date: c[0], tag: c[1], title: c[2] })));
+         } else { setNotices([]); }
+      }
 
-        if(resBanner && resBanner.ok) {
-           const bannerData = parseCSV(await resBanner.text());
-           const activeBanners = bannerData.filter(c => c[1] && c[1].toUpperCase() === 'O').map(c => c[0]).filter(Boolean);
-           setBanners([...activeBanners, 'DEFAULT_BANNER']);
-        } else {
-           setBanners(['DEFAULT_BANNER']);
-        }
+      if(resFcoBoard && resFcoBoard.ok) {
+         const boardData = parseCSV(await resFcoBoard.text());
+         if(boardData.length > 0) {
+           const activeBoards = boardData.filter(c => c[2] && c[2].toUpperCase() === 'O').map(c => c[1]).filter(Boolean);
+           setFcoBoardNotices(activeBoards);
+         } else { setFcoBoardNotices([]); }
+      }
 
-      } catch (error) { console.error('시트 로드 실패:', error); }
-    }
-    fetchData();
+      if(resBanner && resBanner.ok) {
+         const bannerData = parseCSV(await resBanner.text());
+         const activeBanners = bannerData.filter(c => c[1] && c[1].toUpperCase() === 'O').map(c => c[0]).filter(Boolean);
+         setBanners([...activeBanners, 'DEFAULT_BANNER']);
+      } else {
+         setBanners(['DEFAULT_BANNER']);
+      }
+
+      const now = new Date();
+      const ampm = now.getHours() >= 12 ? '오후' : '오전';
+      const h = now.getHours() % 12 || 12;
+      const m = String(now.getMinutes()).padStart(2, '0');
+      setLastUpdateTime(`${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${ampm} ${h}:${m} 기준`);
+
+    } catch (error) { console.error('시트 로드 실패:', error); }
   }, []);
+
+  useEffect(() => {
+    fetchSheetData();
+    const timer = setInterval(() => {
+      fetchSheetData();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [fetchSheetData]);
+
+  useEffect(() => {
+    if (fcoBoardNotices.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentBoardIdx((prev) => (prev + 1) % fcoBoardNotices.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [fcoBoardNotices.length]);
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -165,8 +202,7 @@ export default function MKTOWNPage() {
 
   const fetchNexonAPI = async (endpoint: string, retries = 3): Promise<any> => {
     try {
-      // 🚀 [캐싱 방어 마법 1] 강제로 캐시를 파괴하는 시간 꼬리표(_t=...)를 지워버립니다!
-      const res = await fetch(`/api/nexon?endpoint=${encodeURIComponent(endpoint)}`);
+      const res = await fetch(`/api/nexon?endpoint=${encodeURIComponent(endpoint)}`, { cache: 'no-cache' });
       if (!res.ok) throw new Error(`API Error ${res.status}`);
       return await res.json();
     } catch (err) {
@@ -222,7 +258,6 @@ export default function MKTOWNPage() {
 
       if (Array.isArray(cusMatchIds) && cusMatchIds.length > 0) {
         setLoadingText('커스텀 1on1 데이터 로드 중 (캐시 확인)...');
-        // 안정성이 검증된 5개씩 100ms 쉬는 로직 그대로 유지
         const chunkSize = 5; 
         for (let i = 0; i < cusMatchIds.length; i += chunkSize) {
           if (apiLimitReached) break;
@@ -235,8 +270,6 @@ export default function MKTOWNPage() {
 
               for (let attempt = 0; attempt < 3; attempt++) {
                 try {
-                  // 🚀 [캐싱 방어 마법 2] 매번 서버에 새로 묻는 no-store와 꼬리표를 제거했습니다!
-                  // 이제 Vercel의 CDN(가장자리 캐시)이 일을 대신 해줍니다.
                   const url = `/api/nexon?endpoint=${encodeURIComponent(`/fconline/v1/match-detail?matchid=${id}`)}`;
                   const r = await fetch(url);
                   if (r.status === 429 || r.status === 403) { apiLimitReached = true; return null; }
@@ -311,11 +344,11 @@ export default function MKTOWNPage() {
         wins, draws, losses, 
         winRate: validMatches > 0 ? Math.round((wins / validMatches) * 100) : 0,
         avgGF: validMatches > 0 ? (totalGF / validMatches).toFixed(1) : 0, 
-        avgGA: calcAvgGA.toFixed(1), // 평균 실점 표시용
+        avgGA: calcAvgGA.toFixed(1), 
         avgPossession: validMatches > 0 ? Math.round(totalPossession / validMatches) : 0,
         shootAccuracy: totalShoot > 0 ? Math.round((totalEffectiveShoot / totalShoot) * 100) : 0,
         passAccuracy: totalPassTry > 0 ? Math.round((totalPassSuccess / totalPassTry) * 100) : 0,
-        defenseEfficiency: validMatches > 0 ? Math.max(0, 100 - Math.round((calcAvgGA / 3.0) * 100)) : 0, // 수비 효율 환산 (3실점 0점)
+        defenseEfficiency: validMatches > 0 ? Math.max(0, 100 - Math.round((calcAvgGA / 3.0) * 100)) : 0, 
       });
 
       setNexonBasic(dataBasic);
@@ -336,7 +369,7 @@ export default function MKTOWNPage() {
     const winRate = cusStats.winRate; 
     const attack = Math.min(100, Math.round((cusStats.avgGF / 3.0) * 100)); 
     const pass = cusStats.passAccuracy; 
-    const defense = cusStats.defenseEfficiency; // 수비 효율 적용
+    const defense = cusStats.defenseEfficiency; 
     const possession = Math.min(100, Math.max(0, Math.round((cusStats.avgPossession - 35) * 3.33))); 
     const shoot = cusStats.shootAccuracy; 
 
@@ -544,22 +577,105 @@ export default function MKTOWNPage() {
 
       <div className="max-w-7xl mx-auto space-y-8">
         
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-emerald-900/50 pb-6 relative z-10">
-          <button onClick={goHome} className="text-left group cursor-pointer flex flex-col gap-1">
-            <div className="flex items-center gap-3">
-              {!logoError && ( <img src="/logo.png" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain rounded-2xl drop-shadow-lg" onError={() => setLogoError(true)} /> )}
-              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent group-hover:scale-[1.02] transition-transform">MK&apos;s playground</h1>
-            </div>
-            <p className="text-sm text-emerald-600/80 font-medium tracking-wide mt-1 ml-1">민교의 놀이터</p>
+        {/* 💡 [수정 완료] '민교의 놀이터' 글자 크기 조정 및 whitespace-nowrap으로 한 줄 정렬 */}
+        <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-emerald-900/50 pb-6 relative z-10">
+          <button onClick={goHome} className="text-left group cursor-pointer flex items-center gap-3">
+            {!logoError && ( <img src="/logo.png" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain rounded-xl drop-shadow-lg" onError={() => setLogoError(true)} /> )}
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent whitespace-nowrap">민교의 놀이터</h1>
           </button>
-          <nav className="flex space-x-2 overflow-x-auto pb-2 w-full md:w-auto [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50">
-            {[ { id: 'home', icon: '🏠', label: '메인' }, { id: 'tourney', icon: '🏆', label: 'FCO 콘텐츠' }, { id: 'ranking', icon: '🔍', label: 'FCO 전적' }, { id: 'members', icon: '✨', label: 'FCO 스트리머 명단' }, { id: 'lol', icon: '⚔️', label: '롤 내전 뽑기' }, { id: 'pinball', icon: '🎯', label: '아케이드 핀볼' }, { id: 'ladder', icon: '🪜', label: '사다리 타기' }].map((tab) => (
-              <button key={tab.id} disabled={isLoading} onClick={() => { setActiveTab(tab.id); if (tab.id === 'ranking') setSearchResult(null); }} className={`flex items-center gap-2 px-5 py-3 rounded-lg font-bold text-sm transition-all whitespace-nowrap border disabled:opacity-50 ${ activeTab === tab.id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-transparent text-slate-500 border-transparent hover:text-emerald-200 hover:bg-emerald-900/20' }`}>
+          
+          <nav className="flex flex-wrap gap-2 w-full lg:w-auto">
+            {[ 
+              { id: 'home', icon: '🏠', label: '메인' }, 
+              { id: 'fco_main', icon: '🌟', label: 'FCO 메인' }, 
+              { id: 'tourney', icon: '🏆', label: 'FCO 콘텐츠' }, 
+              { id: 'ranking', icon: '🔍', label: 'FCO 전적' }, 
+              { id: 'members', icon: '✨', label: 'FCO 스트리머 명단' }, 
+              { id: 'lol', icon: '⚔️', label: '롤 내전 뽑기' }, 
+              { id: 'pinball', icon: '🎯', label: '아케이드 핀볼' }, 
+              { id: 'ladder', icon: '🪜', label: '사다리 타기' }
+            ].map((tab) => (
+              <button key={tab.id} disabled={isLoading} onClick={() => { setActiveTab(tab.id); if (tab.id === 'ranking') setSearchResult(null); }} className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap border disabled:opacity-50 ${ activeTab === tab.id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-transparent text-slate-500 border-emerald-900/30 hover:text-emerald-200 hover:bg-emerald-900/20' }`}>
                 <span>{tab.icon}</span>{tab.label}
               </button>
             ))}
           </nav>
         </header>
+
+        {/* 💡 FCO 메인 탭 구현 */}
+        {activeTab === 'fco_main' && (
+          <div className="animate-fadeIn space-y-10">
+            
+            {/* 1. 삐까뻔쩍 전광판 */}
+            <div className="w-full bg-[#050812] border-2 border-emerald-500/80 rounded-3xl p-6 shadow-[0_0_30px_rgba(16,185,129,0.3)] relative overflow-hidden flex items-center justify-center min-h-[120px]">
+               <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/20 via-transparent to-emerald-900/20"></div>
+               {fcoBoardNotices.length > 0 ? (
+                   <h2 key={currentBoardIdx} className="text-2xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-400 animate-pulse text-center w-full px-4 drop-shadow-[0_0_10px_rgba(52,211,153,0.8)]">
+                      {fcoBoardNotices[currentBoardIdx]}
+                   </h2>
+               ) : (
+                   <p className="text-emerald-900/50 font-bold text-xl">등록된 전광판 메시지가 없습니다.</p>
+               )}
+            </div>
+
+            {/* 2. SOOP 생방송 스트리머 목록 (디자인 일치 및 썸네일 깨짐 방지형 프리미엄 카드) */}
+            <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
+               <div className="mb-6">
+                 <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">NOW STREAMING</p>
+                 <div className="flex flex-wrap items-center gap-3">
+                   {/* 💡 [수정 완료] 'FC 온라인' 기울임꼴 제거 후 LIVE 글씨체와 완벽 통일 */}
+                   <h3 className="text-2xl md:text-3xl font-black text-white">FC 온라인 <span className="text-white font-black">LIVE</span></h3>
+                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded-full">{streamers.filter(s => s.isLive).length}명 방송중</span>
+                 </div>
+                 <p className="text-slate-400 text-sm mt-2">현재 FC 온라인 카테고리에서 방송 중인 스트리머는 프로필 사진에 <span className="inline-block w-2 h-2 bg-cyan-500 rounded-full"></span> 테두리로 표시됩니다.</p>
+               </div>
+
+               <div className="flex justify-between items-end mb-4">
+                 <div className="bg-emerald-950/40 border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2">
+                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
+                   5분마다 자동 갱신 · {lastUpdateTime}
+                 </div>
+                 <div className="flex gap-2">
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: -260, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&lt;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: 260, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&gt;</button>
+                 </div>
+               </div>
+
+               <div ref={scrollRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [&::-webkit-scrollbar]:hidden">
+                 {streamers.filter(s => s.isLive).length > 0 ? (
+                   streamers.filter(s => s.isLive).map(s => (
+                     <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col bg-[#0a120e] border border-slate-800 hover:border-slate-600 rounded-2xl overflow-hidden min-w-[240px] md:min-w-[280px] shrink-0 transition-all duration-300 group shadow-lg">
+                       <div className="relative aspect-video bg-gradient-to-br from-emerald-950/40 via-slate-900 to-black w-full overflow-hidden flex items-center justify-center border-b border-slate-800/80">
+                         {/* 💡 썸네일 깨짐 방지용 엠블럼 및 프로필 기반 프리미엄 카드 디자인 */}
+                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent opacity-60"></div>
+                         <div className="relative z-10 flex flex-col items-center gap-2 group-hover:scale-105 transition-transform duration-300">
+                           <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full ring-4 ring-cyan-500 object-cover shadow-[0_0_15px_rgba(6,182,212,0.5)]" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                           <span className="text-emerald-400 font-black text-xs tracking-wider">SOOP LIVE</span>
+                         </div>
+                         <div className="absolute top-2 left-2 bg-red-600/90 px-2 py-0.5 rounded text-white text-[10px] font-black flex items-center gap-1.5 shadow-md">
+                           <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+                         </div>
+                       </div>
+                       <div className="p-4 flex gap-3 items-center">
+                         <div className="flex flex-col overflow-hidden w-full">
+                           <span className="font-black text-slate-100 text-base truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
+                           <span className="text-slate-400 text-xs truncate mt-0.5 font-medium">구단주: {s.fcoNickname}</span>
+                         </div>
+                       </div>
+                     </a>
+                   ))
+                 ) : (
+                   <div className="w-full py-16 flex flex-col items-center justify-center bg-[#0a120e] rounded-2xl border border-dashed border-slate-700/50">
+                     <span className="text-5xl mb-4 opacity-50 grayscale">📺</span>
+                     <p className="text-slate-400 font-bold">현재 방송 중인 스트리머가 없습니다.</p>
+                   </div>
+                 )}
+               </div>
+            </div>
+
+          </div>
+        )}
 
         {activeTab === 'home' && (
           <div className="animate-fadeIn space-y-6">
@@ -849,7 +965,7 @@ export default function MKTOWNPage() {
                     ) : (<div className="w-full h-24 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
 
-                  {/* 🌟 [NEW] 전력 분석 차트 (수비력이 '수비 효율'로 적용되어 밖으로 뻗어나감!) */}
+                  {/* 🌟 전력 분석 차트 */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 shadow-2xl">
                     <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span className="text-emerald-500">🕸️</span> 전력 분석 차트</h3>
                     {cusStats && cusStats.total > 0 ? (
@@ -887,7 +1003,7 @@ export default function MKTOWNPage() {
                     ) : (<div className="w-full h-40 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
 
-                  {/* 💡 [원래 형태 유지 + 안내 멘트 추가] 우측 하단에 위치하던 시트 멤버 상대전적 (그리드 형태) */}
+                  {/* 시트 멤버 상대전적 */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 md:p-8 shadow-2xl">
                     <div className="flex flex-col mb-5 border-b border-emerald-900/30 pb-3">
                       <h3 className="text-xl font-bold text-white flex items-center gap-2"><span className="text-emerald-500">⚔️</span> 시트 멤버 상대전적</h3>
