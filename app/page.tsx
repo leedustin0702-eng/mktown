@@ -300,12 +300,19 @@ export default function MKTOWNPage() {
         }
       });
 
+      // 💡 [수정] 평균 실점 및 수비 효율 계산 로직
+      const calcAvgGA = validMatches > 0 ? (totalGA / validMatches) : 0;
+
       setCusStats({
-        total: validMatches, wins, draws, losses, winRate: validMatches > 0 ? Math.round((wins / validMatches) * 100) : 0,
-        avgGF: validMatches > 0 ? (totalGF / validMatches).toFixed(1) : 0, avgGA: validMatches > 0 ? (totalGA / validMatches).toFixed(1) : 0,
+        total: validMatches, 
+        wins, draws, losses, 
+        winRate: validMatches > 0 ? Math.round((wins / validMatches) * 100) : 0,
+        avgGF: validMatches > 0 ? (totalGF / validMatches).toFixed(1) : 0, 
+        avgGA: calcAvgGA.toFixed(1), // 평균 실점 표시용
         avgPossession: validMatches > 0 ? Math.round(totalPossession / validMatches) : 0,
         shootAccuracy: totalShoot > 0 ? Math.round((totalEffectiveShoot / totalShoot) * 100) : 0,
         passAccuracy: totalPassTry > 0 ? Math.round((totalPassSuccess / totalPassTry) * 100) : 0,
+        defenseEfficiency: validMatches > 0 ? Math.max(0, 100 - Math.round((calcAvgGA / 3.0) * 100)) : 0, // 👈 3실점 이상 0점, 0실점 100점으로 환산하는 수비 효율
       });
 
       setNexonBasic(dataBasic);
@@ -320,14 +327,14 @@ export default function MKTOWNPage() {
     finally { setTimeout(() => { setIsLoading(false); setLoadingText(''); setProgress(0); }, 500); }
   };
 
-  // 💡 [추가] 육각형 레이더 차트 렌더링 함수
+  // 💡 [수비 효율 반영된] 육각형 레이더 차트 렌더링 함수
   const renderRadarChart = () => {
     if (!cusStats || cusStats.total === 0) return null;
     
     const winRate = cusStats.winRate; 
     const attack = Math.min(100, Math.round((cusStats.avgGF / 3.0) * 100)); 
     const pass = cusStats.passAccuracy; 
-    const defense = Math.max(0, 100 - Math.round((cusStats.avgGA / 2.5) * 100)); 
+    const defense = cusStats.defenseEfficiency; // 👈 수비력을 '수비 효율'로 적용!
     const possession = Math.min(100, Math.max(0, Math.round((cusStats.avgPossession - 35) * 3.33))); 
     const shoot = cusStats.shootAccuracy; 
 
@@ -371,7 +378,7 @@ export default function MKTOWNPage() {
           })}
         </svg>
 
-        {/* 💡 하단 설명 (범례) */}
+        {/* 💡 하단 설명 (범례) - 수비 효율 반영 */}
         <div className="w-full mt-4 bg-[#050a08] p-4 rounded-xl border border-emerald-900/30">
           <p className="text-[10px] text-emerald-500 font-bold mb-2 flex items-center gap-1"><span>💡</span> 육각형 지표 설명</p>
           <div className="grid grid-cols-2 gap-y-2 gap-x-4">
@@ -380,7 +387,7 @@ export default function MKTOWNPage() {
             <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">결정력:</strong> 유효 슈팅 비율(%)</div>
             <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">빌드업:</strong> 패스 성공률(%)</div>
             <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">지배력:</strong> 평균 볼 점유율(%)</div>
-            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">수비력:</strong> 평균 실점</div>
+            <div className="text-[10px] text-slate-300"><strong className="text-emerald-400">수비력:</strong> 수비 효율(%)</div>
           </div>
         </div>
       </div>
@@ -841,7 +848,7 @@ export default function MKTOWNPage() {
                     ) : (<div className="w-full h-24 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
 
-                  {/* 🌟 [NEW] 커스텀 1on1 요약 바로 밑에 추가된 육각형 전력 분석 차트 */}
+                  {/* 🌟 [NEW] 전력 분석 차트 (수비력이 '수비 효율'로 적용되어 밖으로 뻗어나감!) */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 shadow-2xl">
                     <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span className="text-emerald-500">🕸️</span> 전력 분석 차트</h3>
                     {cusStats && cusStats.total > 0 ? (
@@ -879,9 +886,12 @@ export default function MKTOWNPage() {
                     ) : (<div className="w-full h-40 bg-emerald-900/10 rounded-2xl animate-pulse"></div>)}
                   </div>
 
-                  {/* 💡 [원래 형태 유지] 우측 하단에 위치하던 시트 멤버 상대전적 (그리드 형태) */}
+                  {/* 💡 [원래 형태 유지 + 안내 멘트 추가] 우측 하단에 위치하던 시트 멤버 상대전적 (그리드 형태) */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-6 md:p-8 shadow-2xl">
-                    <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2 border-b border-emerald-900/30 pb-3"><span className="text-emerald-500">⚔️</span> 시트 멤버 상대전적</h3>
+                    <div className="flex flex-col mb-5 border-b border-emerald-900/30 pb-3">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2"><span className="text-emerald-500">⚔️</span> 시트 멤버 상대전적</h3>
+                      <p className="text-[10px] text-slate-500 mt-1.5">※ 상대전적은 최근 100경기 전적을 기준으로 하며, 검색 주체에 따라 집계 시점이 달라 결과가 상이할 수 있습니다.</p>
+                    </div>
                     {cusStats ? (
                       h2hData.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
