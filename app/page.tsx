@@ -221,7 +221,8 @@ export default function MKTOWNPage() {
 
       if (Array.isArray(cusMatchIds) && cusMatchIds.length > 0) {
         setLoadingText('커스텀 1on1 데이터 로드 중 (캐시 확인)...');
-        const chunkSize = 5; 
+        // 🚀 [2단계 적용] 5에서 15로 늘려서 한 번에 더 많이 가져오기!
+        const chunkSize = 15; 
         for (let i = 0; i < cusMatchIds.length; i += chunkSize) {
           if (apiLimitReached) break;
           const chunk = cusMatchIds.slice(i, i + chunkSize);
@@ -247,7 +248,8 @@ export default function MKTOWNPage() {
           );
           matchDetails.push(...chunkResults.filter(r => r !== null));
           setProgress(35 + Math.floor(((i + chunkSize) / cusMatchIds.length) * 60));
-          await new Promise(res => setTimeout(res, 100)); 
+          // 🚀 [3단계 적용] 100ms 쉬던 걸 50ms로 단축해서 더 빨리 넘어가기!
+          await new Promise(res => setTimeout(res, 50)); 
         }
       }
 
