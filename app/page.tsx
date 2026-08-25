@@ -643,6 +643,7 @@ export default function MKTOWNPage() {
           </nav>
         </header>
 
+        {/* 💡 FCO 메인 탭 구현 */}
         {activeTab === 'fco_main' && (
           <div className="animate-fadeIn space-y-10">
             
@@ -688,12 +689,13 @@ export default function MKTOWNPage() {
                {/* 화살표 버튼 */}
                <div className="flex justify-end items-center mb-4">
                  <div className="flex gap-2">
-                   <button onClick={() => scrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&lt;</button>
-                   <button onClick={() => scrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&gt;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })} className="w-9 h-9 rounded-full border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400 font-bold text-lg shadow-lg">&#10094;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })} className="w-9 h-9 rounded-full border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400 font-bold text-lg shadow-lg">&#10095;</button>
                  </div>
                </div>
 
-               <div ref={scrollRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [&::-webkit-scrollbar]:hidden">
+               {/* 💡 요청하신 상하 분리형 "찐 방송 썸네일" 레이아웃 완벽 롤백! + 스크롤바 유지 */}
+               <div ref={scrollRef} className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-6 pt-2 px-2 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-500/80 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                  {fcoLiveStreamers.length > 0 ? (
                    fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col w-[280px] md:w-[320px] bg-[#0a120e] rounded-2xl overflow-hidden shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50">
