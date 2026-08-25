@@ -643,7 +643,6 @@ export default function MKTOWNPage() {
           </nav>
         </header>
 
-        {/* 💡 FCO 메인 탭 구현 */}
         {activeTab === 'fco_main' && (
           <div className="animate-fadeIn space-y-10">
             
@@ -660,7 +659,7 @@ export default function MKTOWNPage() {
 
             <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
                
-               {/* 💡 상단 타이틀과 우측 뱃지 영역을 가로로 정렬 */}
+               {/* 상단 타이틀과 우측 뱃지 영역 */}
                <div className="flex flex-col lg:flex-row justify-between items-start gap-4 mb-2">
                  
                  {/* 좌측 타이틀 영역 */}
@@ -673,13 +672,13 @@ export default function MKTOWNPage() {
                    </div>
                  </div>
 
-                 {/* 💡 우측 상단 뱃지 및 안내 멘트 영역 (한 줄로 강제 고정) */}
+                 {/* 우측 상단 뱃지 및 안내 멘트 영역 */}
                  <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2 w-fit">
                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
                      5분마다 자동 갱신 · {lastUpdateTime}
                    </div>
-                   {/* 💡 whitespace-nowrap 추가로 두 줄 꺾임 원천 차단 */}
+                   {/* 💡 whitespace-nowrap 추가로 한 줄 강제 고정 완료 */}
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit whitespace-nowrap text-left lg:text-right leading-relaxed">
                      스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
                    </div>
@@ -696,7 +695,7 @@ export default function MKTOWNPage() {
                </div>
 
                {/* 방송 썸네일 리스트 */}
-               <div ref={scrollRef} className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-4 pt-2 px-2 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-500/80 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+               <div ref={scrollRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 pt-2 px-2 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-500/80 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                  {fcoLiveStreamers.length > 0 ? (
                    fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col w-[280px] md:w-[320px] bg-[#0a120e] rounded-2xl overflow-hidden shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50">
@@ -718,7 +717,7 @@ export default function MKTOWNPage() {
                               }
                             }} 
                          />
-                         {/* 좌측 상단 시청자 수 뱃지 (둥근 알약 형태) */}
+                         {/* 좌측 상단 시청자 수 뱃지 */}
                          <div className="absolute top-2.5 left-2.5 bg-black/80 px-2.5 py-1 rounded-full text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md backdrop-blur-sm">
                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                            {s.viewers?.toLocaleString() || '0'}
@@ -753,6 +752,7 @@ export default function MKTOWNPage() {
           </div>
         )}
 
+        {/* 💡 홈 탭 */}
         {activeTab === 'home' && (
           <div className="animate-fadeIn space-y-6">
             
@@ -781,7 +781,8 @@ export default function MKTOWNPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            {/* 💡 [NEW] 김민교 일정 버튼 추가된 4열 레이아웃 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <a href="https://play.sooplive.co.kr/phonics1" target="_blank" rel="noreferrer" className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all overflow-hidden group ${isMinkyoLive ? 'bg-red-950/20 border-red-900/50 hover:border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-[#0a120e] border-slate-800 hover:border-slate-600'}`}>
                 {isMinkyoLive && <div className="absolute inset-0 bg-gradient-to-t from-red-500/10 to-transparent opacity-50"></div>}
                 <div className="relative z-10 flex flex-col items-center gap-3">
@@ -815,6 +816,13 @@ export default function MKTOWNPage() {
                 <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">☕</div>
                 <h4 className="font-black text-lg text-[#03c75a]">패션민교 카페</h4>
                 <p className="text-xs text-slate-500 mt-2 font-bold">공식 네이버 팬카페</p>
+              </a>
+
+              {/* 💡 신규 추가된 '김민교 일정' 버튼 */}
+              <a href="https://cafe.naver.com/f-e/cafes/31206656/menus/45" target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center p-6 bg-[#0a120e] rounded-2xl border border-purple-900/30 hover:border-purple-500/80 hover:bg-purple-950/20 transition-all shadow-lg group">
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">📅</div>
+                <h4 className="font-black text-lg text-purple-400">김민교 일정</h4>
+                <p className="text-xs text-slate-500 mt-2 font-bold">방송 일정 확인</p>
               </a>
             </div>
 
