@@ -673,13 +673,14 @@ export default function MKTOWNPage() {
                    </div>
                  </div>
 
-                 {/* 💡 우측 상단 뱃지 및 안내 멘트 영역 (요청하신 부분 완벽 적용!) */}
+                 {/* 💡 우측 상단 뱃지 및 안내 멘트 영역 (한 줄로 강제 고정) */}
                  <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2 w-fit">
                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
                      5분마다 자동 갱신 · {lastUpdateTime}
                    </div>
-                   <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit max-w-md text-left lg:text-right leading-relaxed">
+                   {/* 💡 whitespace-nowrap 추가로 두 줄 꺾임 원천 차단 */}
+                   <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit whitespace-nowrap text-left lg:text-right leading-relaxed">
                      스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
                    </div>
                  </div>
@@ -689,13 +690,13 @@ export default function MKTOWNPage() {
                {/* 화살표 버튼 */}
                <div className="flex justify-end items-center mb-4">
                  <div className="flex gap-2">
-                   <button onClick={() => scrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })} className="w-9 h-9 rounded-full border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400 font-bold text-lg shadow-lg">&#10094;</button>
-                   <button onClick={() => scrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })} className="w-9 h-9 rounded-full border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400 font-bold text-lg shadow-lg">&#10095;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400 font-bold text-lg shadow-lg">&#10094;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400 font-bold text-lg shadow-lg">&#10095;</button>
                  </div>
                </div>
 
-               {/* 💡 요청하신 상하 분리형 "찐 방송 썸네일" 레이아웃 완벽 롤백! + 스크롤바 유지 */}
-               <div ref={scrollRef} className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-6 pt-2 px-2 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-500/80 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+               {/* 방송 썸네일 리스트 */}
+               <div ref={scrollRef} className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-4 pt-2 px-2 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 hover:[&::-webkit-scrollbar-thumb]:bg-emerald-500/80 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                  {fcoLiveStreamers.length > 0 ? (
                    fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col w-[280px] md:w-[320px] bg-[#0a120e] rounded-2xl overflow-hidden shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50">
