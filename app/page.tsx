@@ -28,20 +28,7 @@ const DIVISIONS: Record<number, string> = {
   5000: "유망주 1부", 5100: "유망주 2부", 5200: "유망주 3부"
 };
 
-// 💡 썸네일, 제목, 시청자 수 등을 담을 수 있도록 인터페이스 확장
-interface Streamer { 
-  id: number; 
-  name: string; 
-  soopId: string; 
-  fcoNickname: string; 
-  tier: string; 
-  isLive: boolean; 
-  isFco: boolean; 
-  viewers: number; 
-  soopTitle?: string;
-  soopBno?: string;
-  soopThumbnail?: string;
-}
+interface Streamer { id: number; name: string; soopId: string; fcoNickname: string; tier: string; isLive: boolean; isFco: boolean; viewers: number; soopTitle?: string; soopBno?: string; soopThumbnail?: string; }
 interface MatchLog { date: string; result: string; myScore: number; oppScore: number; oppName: string; }
 interface H2HStat { streamer: Streamer; wins: number; draws: number; losses: number; recentMatches: MatchLog[]; }
 
@@ -136,16 +123,19 @@ export default function MKTOWNPage() {
       const baseStreamers = mainRows.map((cols, index) => {
         let rawTier = cols[3] || '티어 미정';
         if (!rawTier.includes('티어') && rawTier.trim() !== '') rawTier = rawTier + '티어';
+        
         const isLiveStr = cols[4] ? cols[4].toUpperCase() : '';
-        const isCurrentlyLive = isLiveStr === 'ON' || isLiveStr === 'O' || isLiveStr === 'TRUE';
+        const categoryStr = cols[5] ? cols[5].toUpperCase() : ''; 
+        
+        const isCurrentlyLive = isLiveStr === 'ON' || isLiveStr === 'O' || isLiveStr === 'TRUE' || isLiveStr.includes('FC') || categoryStr !== '';
+        const isFco = isCurrentlyLive && (isLiveStr.includes('FC') || categoryStr.includes('FC') || categoryStr.includes('피파'));
 
         return {
           id: index + 1, name: cols[0] || '이름 없음', soopId: cols[1] || '아이디 없음', 
-          fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, isFco: false, viewers: 0,
+          fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, isFco: isFco, viewers: 0,
         };
       });
 
-      // 💡 [핵심 기술] 시트지에서 방송 중(isLive)인 사람만 추려서 SOOP 서버(백엔드)로 조사 보냄
       const liveBjids = baseStreamers.filter(s => s.isLive && s.soopId !== '아이디 없음').map(s => s.soopId);
       let soopDataMap: Record<string, any> = {};
 
@@ -165,17 +155,16 @@ export default function MKTOWNPage() {
         } catch(e) { console.error("SOOP API 연동 에러:", e); }
       }
 
-      // 시트지 정보 + SOOP에서 훔쳐온 썸네일/시청자/카테고리 정보 결합!
       const finalStreamers = baseStreamers.map(s => {
         if (s.isLive && soopDataMap[s.soopId]) {
           const info = soopDataMap[s.soopId];
           return {
             ...s,
-            isFco: info.isFco,             // SOOP 서버가 FC온라인이라고 확정해줌
-            soopTitle: info.title,         // 실제 방제
-            viewers: info.viewers,         // 실제 시청자 수
-            soopBno: info.bno,             // 썸네일을 위한 고유 방송번호
-            soopThumbnail: info.thumbnail  // 고화질 썸네일 주소
+            isFco: info.isFco,
+            soopTitle: info.title,
+            viewers: info.viewers,
+            soopBno: info.bno,
+            soopThumbnail: info.thumbnail
           };
         }
         return s;
@@ -183,7 +172,6 @@ export default function MKTOWNPage() {
 
       setStreamers(finalStreamers);
 
-      // 나머지 데이터 파싱은 기존과 동일
       setPpudcup(parseCSV(await resCup.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
       setPpuchamps(parseCSV(await resChamps.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
       setPpuropa(parseCSV(await resRopa.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
@@ -586,7 +574,6 @@ export default function MKTOWNPage() {
   const minkyoData = streamers.find(s => s.name === '김민교.');
   const isMinkyoLive = minkyoData?.isLive || false;
 
-  // 💡 [핵심] 이제 수작업 입력 없이, SOOP API가 FC온라인이라고 확정(isFco === true)해준 방송만 뜹니다!
   const fcoLiveStreamers = streamers.filter(s => s.isLive && s.isFco);
 
   return (
@@ -672,13 +659,16 @@ export default function MKTOWNPage() {
 
             <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
                <div className="mb-6">
-                 <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">NOW STREAMING</p>
+                 {/* 💡 NOW STREAMING -> 현재 방송중 교체 완료 */}
+                 <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">현재 방송중</p>
                  <div className="flex flex-wrap items-center gap-3">
                    <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">FC 온라인 <span className="text-red-500 font-black">LIVE</span></h3>
                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded-full">{fcoLiveStreamers.length}명 방송중</span>
+                   {/* 💡 rounded-full -> rounded 교체 (직사각형 뱃지) */}
+                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded">{fcoLiveStreamers.length}명 방송중</span>
                  </div>
-                 <p className="text-slate-400 text-sm mt-2">현재 FC 온라인 카테고리에서 방송 중인 스트리머는 프로필 사진에 <span className="inline-block w-2 h-2 bg-cyan-500 rounded-full"></span> 테두리로 표시됩니다.</p>
+                 {/* 💡 설명 멘트 교체 완료 */}
+                 <p className="text-slate-400 text-sm mt-2">스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.</p>
                </div>
 
                <div className="flex justify-between items-end mb-4">
@@ -692,19 +682,26 @@ export default function MKTOWNPage() {
                  </div>
                </div>
 
-               {/* 💡 [프리미엄 썸네일 카드 디자인 적용] 100% 싱크로율 달성! */}
                <div ref={scrollRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [&::-webkit-scrollbar]:hidden">
                  {fcoLiveStreamers.length > 0 ? (
                    fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col bg-[#0a120e] border border-slate-800 hover:border-slate-600 rounded-2xl overflow-hidden min-w-[280px] md:min-w-[320px] shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group">
                        
                        <div className="relative aspect-video w-full bg-slate-900 overflow-hidden border-b border-slate-800/80">
-                         {/* 💡 referrerPolicy 추가로 외부 썸네일(순간 캡쳐) 정상 출력 보장! */}
                          <img 
                             src={s.soopThumbnail || `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`} 
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                            onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/400x225/050a08/334155?text=No+Signal' }} 
+                            onError={(e) => { 
+                              const target = e.currentTarget as HTMLImageElement;
+                              if(!target.dataset.failed) {
+                                target.dataset.failed = '1';
+                                target.src = `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`;
+                              } else if(target.dataset.failed === '1') {
+                                target.dataset.failed = '2';
+                                target.src = 'https://via.placeholder.com/400x225/050a08/334155?text=No+Signal';
+                              }
+                            }} 
                          />
                          <div className="absolute top-3 left-3 bg-black/70 px-2.5 py-1 rounded-full text-white text-[11px] font-black flex items-center gap-1.5 shadow-md backdrop-blur-sm">
                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
@@ -716,7 +713,7 @@ export default function MKTOWNPage() {
                          <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full border border-slate-700 shrink-0 object-cover bg-slate-800" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                          
                          <div className="flex flex-col overflow-hidden w-full">
-                           <span className="font-bold text-slate-100 text-sm truncate">{s.name}</span>
+                           <span className="font-black text-slate-100 text-base truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
                            <span className="text-slate-400 text-xs truncate mt-0.5">{s.soopTitle || 'FC 온라인 방송 중입니다'}</span>
                            
                            <div className="flex items-center gap-1.5 mt-2.5">
@@ -978,7 +975,7 @@ export default function MKTOWNPage() {
                       ) : (
                         <div className="p-6 text-center text-sm text-slate-400 leading-relaxed bg-[#050a08]/50">
                           <p className="text-xl mb-2">😢</p>
-                          <p className="font-bold text-slate-200 mb-1">명단에 등록되지 않은 구단주입니다.</p>
+                          <p className="font-bold text-slate-200 mb-1">명단에 등록되지 구단주입니다.</p>
                           <p><span className="text-emerald-400 font-bold bg-emerald-900/30 px-1 py-0.5 rounded">숲 melonoff</span> 로</p>
                           <p className="text-xs mt-1 text-slate-500">[스트리머명 + 구단주닉네임] 제보 부탁드립니다!</p>
                         </div>
