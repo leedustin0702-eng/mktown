@@ -28,7 +28,20 @@ const DIVISIONS: Record<number, string> = {
   5000: "유망주 1부", 5100: "유망주 2부", 5200: "유망주 3부"
 };
 
-interface Streamer { id: number; name: string; soopId: string; fcoNickname: string; tier: string; isLive: boolean; viewers: number; }
+// 💡 썸네일, 제목, 시청자 수 등을 담을 수 있도록 인터페이스 확장
+interface Streamer { 
+  id: number; 
+  name: string; 
+  soopId: string; 
+  fcoNickname: string; 
+  tier: string; 
+  isLive: boolean; 
+  isFco: boolean; 
+  viewers: number; 
+  soopTitle?: string;
+  soopBno?: string;
+  soopThumbnail?: string;
+}
 interface MatchLog { date: string; result: string; myScore: number; oppScore: number; oppName: string; }
 interface H2HStat { streamer: Streamer; wins: number; draws: number; losses: number; recentMatches: MatchLog[]; }
 
@@ -120,18 +133,57 @@ export default function MKTOWNPage() {
       ]);
 
       const mainRows = parseCSV(await resMain.text());
-      const data = mainRows.map((cols, index) => {
+      const baseStreamers = mainRows.map((cols, index) => {
         let rawTier = cols[3] || '티어 미정';
         if (!rawTier.includes('티어') && rawTier.trim() !== '') rawTier = rawTier + '티어';
         const isLiveStr = cols[4] ? cols[4].toUpperCase() : '';
         const isCurrentlyLive = isLiveStr === 'ON' || isLiveStr === 'O' || isLiveStr === 'TRUE';
+
         return {
           id: index + 1, name: cols[0] || '이름 없음', soopId: cols[1] || '아이디 없음', 
-          fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, viewers: 0,
+          fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, isFco: false, viewers: 0,
         };
       });
-      setStreamers(data);
 
+      // 💡 [핵심 기술] 시트지에서 방송 중(isLive)인 사람만 추려서 SOOP 서버(백엔드)로 조사 보냄
+      const liveBjids = baseStreamers.filter(s => s.isLive && s.soopId !== '아이디 없음').map(s => s.soopId);
+      let soopDataMap: Record<string, any> = {};
+
+      if (liveBjids.length > 0) {
+        try {
+          const soopRes = await fetch('/api/soop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bjids: liveBjids })
+          });
+          if(soopRes.ok) {
+             const soopList = await soopRes.json();
+             soopList.forEach((info: any) => {
+               soopDataMap[info.bjid] = info;
+             });
+          }
+        } catch(e) { console.error("SOOP API 연동 에러:", e); }
+      }
+
+      // 시트지 정보 + SOOP에서 훔쳐온 썸네일/시청자/카테고리 정보 결합!
+      const finalStreamers = baseStreamers.map(s => {
+        if (s.isLive && soopDataMap[s.soopId]) {
+          const info = soopDataMap[s.soopId];
+          return {
+            ...s,
+            isFco: info.isFco,             // SOOP 서버가 FC온라인이라고 확정해줌
+            soopTitle: info.title,         // 실제 방제
+            viewers: info.viewers,         // 실제 시청자 수
+            soopBno: info.bno,             // 썸네일을 위한 고유 방송번호
+            soopThumbnail: info.thumbnail  // 고화질 썸네일 주소
+          };
+        }
+        return s;
+      });
+
+      setStreamers(finalStreamers);
+
+      // 나머지 데이터 파싱은 기존과 동일
       setPpudcup(parseCSV(await resCup.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
       setPpuchamps(parseCSV(await resChamps.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
       setPpuropa(parseCSV(await resRopa.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
@@ -502,7 +554,7 @@ export default function MKTOWNPage() {
     const imgUrl = soopId ? `https://stimg.afreecatv.com/LOGO/${soopId.substring(0, 2)}/${soopId}/${soopId}.jpg` : 'https://via.placeholder.com/150';
     return (
         <div key={p.name} className="flex items-center gap-3 bg-[#050a08] p-3 rounded-xl border border-emerald-900/20 hover:border-emerald-500/30 transition-colors group cursor-pointer" onClick={() => { setSearchInput(streamer?.fcoNickname || p.name); handleSearch(streamer?.fcoNickname || p.name); setActiveTab('ranking'); }}>
-             <img src={imgUrl} className="w-10 h-10 shrink-0 rounded-full border border-slate-700 object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+             <img src={imgUrl} referrerPolicy="no-referrer" className="w-10 h-10 shrink-0 rounded-full border border-slate-700 object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
              <div className="flex flex-col flex-1">
                  <span className="font-bold text-slate-200 text-sm group-hover:text-emerald-400 transition-colors">{p.name}</span>
                  {type === 'tourney' && p.team && <span className="text-[10px] text-emerald-500 bg-emerald-900/20 inline-block px-1.5 py-0.5 rounded mt-0.5 w-max">{p.team}</span>}
@@ -534,6 +586,9 @@ export default function MKTOWNPage() {
   const minkyoData = streamers.find(s => s.name === '김민교.');
   const isMinkyoLive = minkyoData?.isLive || false;
 
+  // 💡 [핵심] 이제 수작업 입력 없이, SOOP API가 FC온라인이라고 확정(isFco === true)해준 방송만 뜹니다!
+  const fcoLiveStreamers = streamers.filter(s => s.isLive && s.isFco);
+
   return (
     <main className="min-h-screen bg-[#050a08] text-slate-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30 relative">
       <style dangerouslySetInnerHTML={{ __html: `@keyframes drawLineAnimation { 0% { stroke-dashoffset: 30000; } 100% { stroke-dashoffset: 0; } }`}} />
@@ -543,7 +598,7 @@ export default function MKTOWNPage() {
           <div className="bg-[#0a120e] border border-emerald-500/50 rounded-3xl w-full max-w-lg p-6 md:p-8 shadow-[0_0_50px_rgba(16,185,129,0.3)] relative">
             <button onClick={() => setSelectedH2H(null)} className="absolute top-4 right-6 text-slate-400 hover:text-white text-3xl font-light">&times;</button>
             <div className="flex items-center gap-4 mb-6 border-b border-emerald-900/50 pb-4">
-              <img src={selectedH2H.streamer.soopId ? `https://stimg.afreecatv.com/LOGO/${selectedH2H.streamer.soopId.substring(0, 2)}/${selectedH2H.streamer.soopId}/${selectedH2H.streamer.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-2 border-emerald-500/50 object-cover" />
+              <img src={selectedH2H.streamer.soopId ? `https://stimg.afreecatv.com/LOGO/${selectedH2H.streamer.soopId.substring(0, 2)}/${selectedH2H.streamer.soopId}/${selectedH2H.streamer.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-16 h-16 rounded-full border-2 border-emerald-500/50 object-cover" />
               <div>
                 <h3 className="text-2xl font-black text-white">{searchResult?.name} <span className="text-emerald-500">VS</span> {selectedH2H.streamer.name}</h3>
                 <p className="text-emerald-400/80 text-sm font-bold mt-1">상대전적 {selectedH2H.wins}승 {selectedH2H.draws}무 {selectedH2H.losses}패</p>
@@ -577,10 +632,9 @@ export default function MKTOWNPage() {
 
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* 💡 [수정 완료] '민교의 놀이터' 글자 크기 조정 및 whitespace-nowrap으로 한 줄 정렬 */}
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-emerald-900/50 pb-6 relative z-10">
-          <button onClick={goHome} className="text-left group cursor-pointer flex items-center gap-3">
-            {!logoError && ( <img src="/logo.png" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain rounded-xl drop-shadow-lg" onError={() => setLogoError(true)} /> )}
+          <button onClick={goHome} className="text-left group cursor-pointer flex items-center gap-4 shrink-0">
+            {!logoError && ( <img src="/logo.png" alt="Logo" className="w-12 h-12 md:w-14 md:h-14 object-contain rounded-2xl drop-shadow-lg" onError={() => setLogoError(true)} /> )}
             <h1 className="text-xl md:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent whitespace-nowrap">민교의 놀이터</h1>
           </button>
           
@@ -590,7 +644,7 @@ export default function MKTOWNPage() {
               { id: 'fco_main', icon: '🌟', label: 'FCO 메인' }, 
               { id: 'tourney', icon: '🏆', label: 'FCO 콘텐츠' }, 
               { id: 'ranking', icon: '🔍', label: 'FCO 전적' }, 
-              { id: 'members', icon: '✨', label: 'FCO 스트리머 명단' }, 
+              { id: 'members', icon: '✨', label: '스트리머 명단' }, 
               { id: 'lol', icon: '⚔️', label: '롤 내전 뽑기' }, 
               { id: 'pinball', icon: '🎯', label: '아케이드 핀볼' }, 
               { id: 'ladder', icon: '🪜', label: '사다리 타기' }
@@ -602,11 +656,9 @@ export default function MKTOWNPage() {
           </nav>
         </header>
 
-        {/* 💡 FCO 메인 탭 구현 */}
         {activeTab === 'fco_main' && (
           <div className="animate-fadeIn space-y-10">
             
-            {/* 1. 삐까뻔쩍 전광판 */}
             <div className="w-full bg-[#050812] border-2 border-emerald-500/80 rounded-3xl p-6 shadow-[0_0_30px_rgba(16,185,129,0.3)] relative overflow-hidden flex items-center justify-center min-h-[120px]">
                <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/20 via-transparent to-emerald-900/20"></div>
                {fcoBoardNotices.length > 0 ? (
@@ -618,15 +670,13 @@ export default function MKTOWNPage() {
                )}
             </div>
 
-            {/* 2. SOOP 생방송 스트리머 목록 (디자인 일치 및 썸네일 깨짐 방지형 프리미엄 카드) */}
             <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
                <div className="mb-6">
                  <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">NOW STREAMING</p>
                  <div className="flex flex-wrap items-center gap-3">
-                   {/* 💡 [수정 완료] 'FC 온라인' 기울임꼴 제거 후 LIVE 글씨체와 완벽 통일 */}
-                   <h3 className="text-2xl md:text-3xl font-black text-white">FC 온라인 <span className="text-white font-black">LIVE</span></h3>
+                   <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">FC 온라인 <span className="text-red-500 font-black">LIVE</span></h3>
                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded-full">{streamers.filter(s => s.isLive).length}명 방송중</span>
+                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded-full">{fcoLiveStreamers.length}명 방송중</span>
                  </div>
                  <p className="text-slate-400 text-sm mt-2">현재 FC 온라인 카테고리에서 방송 중인 스트리머는 프로필 사진에 <span className="inline-block w-2 h-2 bg-cyan-500 rounded-full"></span> 테두리로 표시됩니다.</p>
                </div>
@@ -637,38 +687,51 @@ export default function MKTOWNPage() {
                    5분마다 자동 갱신 · {lastUpdateTime}
                  </div>
                  <div className="flex gap-2">
-                   <button onClick={() => scrollRef.current?.scrollBy({ left: -260, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&lt;</button>
-                   <button onClick={() => scrollRef.current?.scrollBy({ left: 260, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&gt;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&lt;</button>
+                   <button onClick={() => scrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&gt;</button>
                  </div>
                </div>
 
+               {/* 💡 [프리미엄 썸네일 카드 디자인 적용] 100% 싱크로율 달성! */}
                <div ref={scrollRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [&::-webkit-scrollbar]:hidden">
-                 {streamers.filter(s => s.isLive).length > 0 ? (
-                   streamers.filter(s => s.isLive).map(s => (
-                     <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col bg-[#0a120e] border border-slate-800 hover:border-slate-600 rounded-2xl overflow-hidden min-w-[240px] md:min-w-[280px] shrink-0 transition-all duration-300 group shadow-lg">
-                       <div className="relative aspect-video bg-gradient-to-br from-emerald-950/40 via-slate-900 to-black w-full overflow-hidden flex items-center justify-center border-b border-slate-800/80">
-                         {/* 💡 썸네일 깨짐 방지용 엠블럼 및 프로필 기반 프리미엄 카드 디자인 */}
-                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent opacity-60"></div>
-                         <div className="relative z-10 flex flex-col items-center gap-2 group-hover:scale-105 transition-transform duration-300">
-                           <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full ring-4 ring-cyan-500 object-cover shadow-[0_0_15px_rgba(6,182,212,0.5)]" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
-                           <span className="text-emerald-400 font-black text-xs tracking-wider">SOOP LIVE</span>
-                         </div>
-                         <div className="absolute top-2 left-2 bg-red-600/90 px-2 py-0.5 rounded text-white text-[10px] font-black flex items-center gap-1.5 shadow-md">
-                           <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+                 {fcoLiveStreamers.length > 0 ? (
+                   fcoLiveStreamers.map(s => (
+                     <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col bg-[#0a120e] border border-slate-800 hover:border-slate-600 rounded-2xl overflow-hidden min-w-[280px] md:min-w-[320px] shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group">
+                       
+                       <div className="relative aspect-video w-full bg-slate-900 overflow-hidden border-b border-slate-800/80">
+                         {/* 💡 referrerPolicy 추가로 외부 썸네일(순간 캡쳐) 정상 출력 보장! */}
+                         <img 
+                            src={s.soopThumbnail || `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                            onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/400x225/050a08/334155?text=No+Signal' }} 
+                         />
+                         <div className="absolute top-3 left-3 bg-black/70 px-2.5 py-1 rounded-full text-white text-[11px] font-black flex items-center gap-1.5 shadow-md backdrop-blur-sm">
+                           <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                           {s.viewers?.toLocaleString() || '0'}
                          </div>
                        </div>
-                       <div className="p-4 flex gap-3 items-center">
+                       
+                       <div className="p-4 flex gap-3 items-start bg-[#0a120e]">
+                         <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full border border-slate-700 shrink-0 object-cover bg-slate-800" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                         
                          <div className="flex flex-col overflow-hidden w-full">
-                           <span className="font-black text-slate-100 text-base truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
-                           <span className="text-slate-400 text-xs truncate mt-0.5 font-medium">구단주: {s.fcoNickname}</span>
+                           <span className="font-bold text-slate-100 text-sm truncate">{s.name}</span>
+                           <span className="text-slate-400 text-xs truncate mt-0.5">{s.soopTitle || 'FC 온라인 방송 중입니다'}</span>
+                           
+                           <div className="flex items-center gap-1.5 mt-2.5">
+                             <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full font-medium border border-slate-700">한국어</span>
+                             <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full font-medium border border-slate-700">FC 온라인</span>
+                           </div>
                          </div>
                        </div>
+
                      </a>
                    ))
                  ) : (
                    <div className="w-full py-16 flex flex-col items-center justify-center bg-[#0a120e] rounded-2xl border border-dashed border-slate-700/50">
                      <span className="text-5xl mb-4 opacity-50 grayscale">📺</span>
-                     <p className="text-slate-400 font-bold">현재 방송 중인 스트리머가 없습니다.</p>
+                     <p className="text-slate-400 font-bold">현재 FC 온라인 카테고리 방송이 없습니다.</p>
                    </div>
                  )}
                </div>
@@ -853,7 +916,7 @@ export default function MKTOWNPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-h-[600px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-emerald-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-[#050a08]">
                 {streamers.sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map((s) => (
                   <div key={s.id} onClick={() => { setSearchInput(s.fcoNickname); handleSearch(s.fcoNickname); setActiveTab('ranking'); }} className="group flex items-center gap-4 bg-[#050a08] p-3 rounded-2xl border border-emerald-900/20 hover:border-emerald-500/50 transition-all cursor-pointer">
-                    <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} alt="profile" className="w-10 h-10 shrink-0 rounded-full border border-slate-700 object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                    <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" alt="profile" className="w-10 h-10 shrink-0 rounded-full border border-slate-700 object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                     <div className="flex flex-col flex-1 overflow-hidden">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-200 group-hover:text-emerald-300 transition-colors truncate">{s.name}</span>
@@ -904,7 +967,7 @@ export default function MKTOWNPage() {
                             onClick={() => { setSearchInput(s.fcoNickname); handleSearch(s.fcoNickname); setIsDropdownOpen(false); }}
                             className="flex items-center gap-4 p-4 border-b border-emerald-900/30 hover:bg-emerald-900/40 cursor-pointer transition-colors last:border-0"
                           >
-                            <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full border border-emerald-500/50 object-cover shadow-[0_0_10px_rgba(16,185,129,0.2)]" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                            <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full border border-emerald-500/50 object-cover shadow-[0_0_10px_rgba(16,185,129,0.2)]" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                             <div className="flex flex-col flex-1">
                               <span className="text-white font-black text-sm">{s.name}</span>
                               <span className="text-emerald-400 text-xs font-mono font-bold mt-0.5">구단주: {s.fcoNickname}</span>
@@ -936,7 +999,7 @@ export default function MKTOWNPage() {
                   {/* 프로필 박스 */}
                   <div className="bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl relative">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#050a08] ring-2 ring-emerald-500 bg-slate-800 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                      <img src={searchResult.soopId ? `https://stimg.afreecatv.com/LOGO/${searchResult.soopId.substring(0, 2)}/${searchResult.soopId}/${searchResult.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                      <img src={searchResult.soopId ? `https://stimg.afreecatv.com/LOGO/${searchResult.soopId.substring(0, 2)}/${searchResult.soopId}/${searchResult.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                     </div>
                     <h2 className="text-3xl font-black text-white flex flex-col items-center gap-2 mt-2">
                       <div className="flex items-center gap-2">{searchResult.name}{nexonBasic?.level && <span className="text-[10px] bg-emerald-900/50 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800">Lv.{nexonBasic.level}</span>}</div>
@@ -1017,7 +1080,7 @@ export default function MKTOWNPage() {
                               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-900 group-hover:bg-emerald-500 transition-colors"></div>
                               
                               <div className="flex items-center gap-3 pl-2 flex-1">
-                                <img src={stat.streamer.soopId ? `https://stimg.afreecatv.com/LOGO/${stat.streamer.soopId.substring(0, 2)}/${stat.streamer.soopId}/${stat.streamer.soopId}.jpg` : 'https://via.placeholder.com/150'} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full border border-slate-700 object-cover" />
+                                <img src={stat.streamer.soopId ? `https://stimg.afreecatv.com/LOGO/${stat.streamer.soopId.substring(0, 2)}/${stat.streamer.soopId}/${stat.streamer.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full border border-slate-700 object-cover" />
                                 <div className="flex-1">
                                   <p className="font-bold text-slate-100">{stat.streamer.name}</p>
                                   <p className="text-xs text-slate-500 mt-1">{stat.wins}승 {stat.draws}무 {stat.losses}패</p>
