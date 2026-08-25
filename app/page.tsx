@@ -658,24 +658,35 @@ export default function MKTOWNPage() {
             </div>
 
             <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
-               <div className="mb-6">
-                 {/* 💡 NOW STREAMING -> 현재 방송중 교체 완료 */}
-                 <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">현재 방송중</p>
-                 <div className="flex flex-wrap items-center gap-3">
-                   <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">FC 온라인 <span className="text-red-500 font-black">LIVE</span></h3>
-                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                   {/* 💡 rounded-full -> rounded 교체 (직사각형 뱃지) */}
-                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded">{fcoLiveStreamers.length}명 방송중</span>
+               
+               {/* 💡 상단 타이틀과 우측 뱃지 영역을 가로로 정렬 */}
+               <div className="flex flex-col lg:flex-row justify-between items-start gap-4 mb-2">
+                 
+                 {/* 좌측 타이틀 영역 */}
+                 <div>
+                   <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">현재 방송중</p>
+                   <div className="flex flex-wrap items-center gap-3">
+                     <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">FC 온라인 <span className="text-red-500 font-black">LIVE</span></h3>
+                     <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                     <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded">{fcoLiveStreamers.length}명 방송중</span>
+                   </div>
                  </div>
-                 {/* 💡 설명 멘트 교체 완료 */}
-                 <p className="text-slate-400 text-sm mt-2">스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.</p>
+
+                 {/* 💡 우측 상단 뱃지 및 안내 멘트 영역 (요청하신 부분 완벽 적용!) */}
+                 <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
+                   <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2 w-fit">
+                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
+                     5분마다 자동 갱신 · {lastUpdateTime}
+                   </div>
+                   <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit max-w-md text-left lg:text-right leading-relaxed">
+                     스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
+                   </div>
+                 </div>
+
                </div>
 
-               <div className="flex justify-between items-end mb-4">
-                 <div className="bg-emerald-950/40 border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2">
-                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
-                   5분마다 자동 갱신 · {lastUpdateTime}
-                 </div>
+               {/* 화살표 버튼 */}
+               <div className="flex justify-end items-center mb-4">
                  <div className="flex gap-2">
                    <button onClick={() => scrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&lt;</button>
                    <button onClick={() => scrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' })} className="w-8 h-8 rounded border border-slate-700 flex items-center justify-center bg-[#0a120e] hover:bg-slate-800 transition-colors text-slate-400">&gt;</button>
@@ -685,9 +696,10 @@ export default function MKTOWNPage() {
                <div ref={scrollRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [&::-webkit-scrollbar]:hidden">
                  {fcoLiveStreamers.length > 0 ? (
                    fcoLiveStreamers.map(s => (
-                     <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col bg-[#0a120e] border border-slate-800 hover:border-slate-600 rounded-2xl overflow-hidden min-w-[280px] md:min-w-[320px] shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group">
+                     <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="snap-start flex flex-col w-[280px] md:w-[320px] bg-[#0a120e] rounded-2xl overflow-hidden shrink-0 transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50">
                        
-                       <div className="relative aspect-video w-full bg-slate-900 overflow-hidden border-b border-slate-800/80">
+                       {/* 1. 썸네일 영역 (상단) */}
+                       <div className="relative aspect-video w-full bg-slate-900 overflow-hidden border-b border-slate-800/50">
                          <img 
                             src={s.soopThumbnail || `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`} 
                             referrerPolicy="no-referrer"
@@ -703,26 +715,27 @@ export default function MKTOWNPage() {
                               }
                             }} 
                          />
-                         <div className="absolute top-3 left-3 bg-black/70 px-2.5 py-1 rounded-full text-white text-[11px] font-black flex items-center gap-1.5 shadow-md backdrop-blur-sm">
+                         {/* 좌측 상단 시청자 수 뱃지 (둥근 알약 형태) */}
+                         <div className="absolute top-2.5 left-2.5 bg-black/80 px-2.5 py-1 rounded-full text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md backdrop-blur-sm">
                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                            {s.viewers?.toLocaleString() || '0'}
                          </div>
                        </div>
                        
+                       {/* 2. 정보 영역 (하단) */}
                        <div className="p-4 flex gap-3 items-start bg-[#0a120e]">
-                         <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full border border-slate-700 shrink-0 object-cover bg-slate-800" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
+                         <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full border border-slate-700 shrink-0 object-cover bg-slate-800" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                          
                          <div className="flex flex-col overflow-hidden w-full">
-                           <span className="font-black text-slate-100 text-base truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
+                           <span className="font-bold text-slate-100 text-sm truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
                            <span className="text-slate-400 text-xs truncate mt-0.5">{s.soopTitle || 'FC 온라인 방송 중입니다'}</span>
                            
                            <div className="flex items-center gap-1.5 mt-2.5">
-                             <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full font-medium border border-slate-700">한국어</span>
-                             <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full font-medium border border-slate-700">FC 온라인</span>
+                             <span className="bg-slate-800/80 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-medium border border-slate-700/50">한국어</span>
+                             <span className="bg-slate-800/80 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-medium border border-slate-700/50">FC 온라인</span>
                            </div>
                          </div>
                        </div>
-
                      </a>
                    ))
                  ) : (
@@ -975,7 +988,7 @@ export default function MKTOWNPage() {
                       ) : (
                         <div className="p-6 text-center text-sm text-slate-400 leading-relaxed bg-[#050a08]/50">
                           <p className="text-xl mb-2">😢</p>
-                          <p className="font-bold text-slate-200 mb-1">명단에 등록되지 구단주입니다.</p>
+                          <p className="font-bold text-slate-200 mb-1">명단에 등록되지 않은 구단주입니다.</p>
                           <p><span className="text-emerald-400 font-bold bg-emerald-900/30 px-1 py-0.5 rounded">숲 melonoff</span> 로</p>
                           <p className="text-xs mt-1 text-slate-500">[스트리머명 + 구단주닉네임] 제보 부탁드립니다!</p>
                         </div>
