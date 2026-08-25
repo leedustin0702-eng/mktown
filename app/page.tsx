@@ -55,6 +55,8 @@ export default function MKTOWNPage() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [logoError, setLogoError] = useState<boolean>(false);
 
+  const scrollRef = useRef<HTMLDivElement>(null); 
+
   const [ppudcup, setPpudcup] = useState<any[]>([]);
   const [ppuchamps, setPpuchamps] = useState<any[]>([]);
   const [fishman, setFishman] = useState<any[]>([]);
@@ -75,15 +77,18 @@ export default function MKTOWNPage() {
   const [loadingText, setLoadingText] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
 
+  // 롤 내전 State
   const [lolPlayers, setLolPlayers] = useState<Record<string, string[]>>({ '탑': ['', ''], '정글': ['', ''], '미드': ['', ''], '원딜': ['', ''], '서포터': ['', ''] });
   const [blueTeam, setBlueTeam] = useState<Record<string, string> | null>(null);
   const [redTeam, setRedTeam] = useState<Record<string, string> | null>(null);
 
+  // 원래 방식 핀볼(룰렛) State
   const [pbItems, setPbItems] = useState<string>('치킨 쏘기, 커피 쏘기, 벌칙, 무효, 만원 기부');
   const [pbResult, setPbResult] = useState<string | null>(null);
   const [pbRolling, setPbRolling] = useState<boolean>(false);
   const [pbCurrent, setPbCurrent] = useState<string>('준비 완료!');
 
+  // 사다리 타기 State
   const LADDER_ROWS = 12;
   const [ladderCols, setLadderCols] = useState<number>(4);
   const initPlayers = Array.from({length: 20}, (_, i) => i < 8 ? `참가자${i+1}` : '');
@@ -468,6 +473,9 @@ export default function MKTOWNPage() {
 
   const goHome = () => { setActiveTab('home'); setSearchResult(null); setNexonRank(null); setNexonBasic(null); setH2hData([]); setSearchInput(''); };
 
+  // ==========================================
+  // ⚔️ 롤 내전 함수
+  // ==========================================
   const handleShuffleTeams = () => {
     const blue: Record<string, string> = {}; const red: Record<string, string> = {};
     Object.keys(lolPlayers).forEach((role) => {
@@ -476,6 +484,10 @@ export default function MKTOWNPage() {
     });
     setBlueTeam(blue); setRedTeam(red);
   };
+
+  // ==========================================
+  // 🎯 원래 핀볼 롤링 함수
+  // ==========================================
   const handleStartPinball = () => {
     const arr = pbItems.split(',').map(s => s.trim()).filter(Boolean);
     if(arr.length < 2) { alert('쉼표(,)로 구분해서 2개 이상 입력하세요!'); return; }
@@ -488,6 +500,9 @@ export default function MKTOWNPage() {
     roll();
   };
 
+  // ==========================================
+  // 🪜 사다리 타기 함수
+  // ==========================================
   const SVG_W = 1000; const SVG_H = 1000;
   const getX = (c: number) => (c + 0.5) * (SVG_W / ladderCols); const getY = (r: number) => r * (SVG_H / (LADDER_ROWS + 1));
   
@@ -572,7 +587,6 @@ export default function MKTOWNPage() {
   const minkyoData = streamers.find(s => s.name === '김민교.');
   const isMinkyoLive = minkyoData?.isLive || false;
 
-  // 💡 [핵심 구현] 스트리머 목록이 바뀔 때마다 무작위로 섞어서 화면에 뿌려줌!
   const fcoLiveStreamers = useMemo(() => {
     return [...streamers.filter(s => s.isLive && s.isFco)].sort(() => Math.random() - 0.5);
   }, [streamers]);
@@ -634,7 +648,7 @@ export default function MKTOWNPage() {
               { id: 'ranking', icon: '🔍', label: 'FCO 전적' }, 
               { id: 'members', icon: '✨', label: '스트리머 명단' }, 
               { id: 'lol', icon: '⚔️', label: '롤 내전 뽑기' }, 
-              { id: 'pinball', icon: '🎯', label: '아케이드 핀볼' }, 
+              { id: 'pinball', icon: '🎯', label: '핀볼' }, 
               { id: 'ladder', icon: '🪜', label: '사다리 타기' }
             ].map((tab) => (
               <button key={tab.id} disabled={isLoading} onClick={() => { setActiveTab(tab.id); if (tab.id === 'ranking') setSearchResult(null); }} className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap border disabled:opacity-50 ${ activeTab === tab.id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-transparent text-slate-500 border-emerald-900/30 hover:text-emerald-200 hover:bg-emerald-900/20' }`}>
@@ -674,21 +688,20 @@ export default function MKTOWNPage() {
                    </div>
                  </div>
 
-                 {/* 💡 요청하신 배치 적용: 5분 갱신 알림판 아래에 안내 문구를 초록색 박스에 가둬서 우측 상단 정렬 */}
+                 {/* 우측 상단 뱃지 및 안내 멘트 영역 */}
                  <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2 w-fit">
                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
                      5분마다 자동 갱신 · {lastUpdateTime}
                    </div>
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit whitespace-nowrap text-left lg:text-right leading-relaxed">
-                     스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다. 순서는 5분마다 랜덤으로 갱신.
+                     스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
                    </div>
                  </div>
                </div>
 
-               {/* 💡 [핵심] 가로 스크롤 완전 제거 & Grid 배치 적용 (랜덤 셔플 반영) */}
                {fcoLiveStreamers.length > 0 ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pt-4">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pt-2">
                    {fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="flex flex-col bg-[#0a120e] rounded-2xl overflow-hidden transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50 h-full">
                        
@@ -709,7 +722,7 @@ export default function MKTOWNPage() {
                               }
                             }} 
                          />
-                         {/* 좌측 상단 시청자 수 뱃지 (둥근 알약 형태) */}
+                         {/* 좌측 상단 시청자 수 뱃지 */}
                          <div className="absolute top-2.5 left-2.5 bg-black/80 px-2.5 py-1 rounded-full text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md backdrop-blur-sm">
                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                            {s.viewers?.toLocaleString() || '0'}
@@ -773,7 +786,6 @@ export default function MKTOWNPage() {
               )}
             </div>
 
-            {/* 💡 김민교 일정 버튼 추가된 4열 레이아웃 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <a href="https://play.sooplive.co.kr/phonics1" target="_blank" rel="noreferrer" className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all overflow-hidden group ${isMinkyoLive ? 'bg-red-950/20 border-red-900/50 hover:border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-[#0a120e] border-slate-800 hover:border-slate-600'}`}>
                 {isMinkyoLive && <div className="absolute inset-0 bg-gradient-to-t from-red-500/10 to-transparent opacity-50"></div>}
@@ -1117,6 +1129,100 @@ export default function MKTOWNPage() {
 
               </div>
             )}
+          </div>
+        )}
+
+        {/* 💡 롤 내전 탭 */}
+        {activeTab === 'lol' && (
+          <div className="flex flex-col gap-8 animate-fadeIn max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-[#050812] border border-blue-900/50 rounded-3xl p-6 shadow-[0_0_30px_rgba(37,99,235,0.1)] flex flex-col"><h3 className="text-xl font-black text-blue-500 mb-5 text-center tracking-widest">🟦 BLUE TEAM</h3><div className="space-y-3 flex-1 flex flex-col justify-center">{(['탑', '정글', '미드', '원딜', '서포터'] as const).map((role) => (<div key={role} className="flex justify-between items-center bg-blue-950/20 p-4 rounded-xl border border-blue-900/30"><span className="text-blue-500/70 font-bold text-sm w-12">{role}</span><span className="font-bold text-white text-lg">{blueTeam ? blueTeam[role] : '대기 중...'}</span></div>))}</div></div>
+              <div className="bg-[#120505] border border-red-900/50 rounded-3xl p-6 shadow-[0_0_30px_rgba(220,38,38,0.1)] flex flex-col"><h3 className="text-xl font-black text-red-500 mb-5 text-center tracking-widest">🟥 RED TEAM</h3><div className="space-y-3 flex-1 flex flex-col justify-center">{(['탑', '정글', '미드', '원딜', '서포터'] as const).map((role) => (<div key={role} className="flex justify-between items-center bg-red-950/20 p-4 rounded-xl border border-red-900/30"><span className="text-red-500/70 font-bold text-sm w-12">{role}</span><span className="font-bold text-white text-lg">{redTeam ? redTeam[role] : '대기 중...'}</span></div>))}</div></div>
+            </div>
+            <div className="w-full flex flex-col bg-[#0a120e] border border-emerald-900/50 rounded-3xl p-8 md:p-10 shadow-2xl relative"><h2 className="text-3xl font-black text-white mb-2 text-center">⚔️ 롤 라인업 입력</h2>
+              <div className="space-y-5 mb-10 mt-5 flex-1">
+                {(['탑', '정글', '미드', '원딜', '서포터'] as const).map((role) => (
+                  <div key={role} className="flex flex-col md:flex-row items-center gap-3 md:gap-6 bg-[#050a08] p-4 rounded-2xl border border-emerald-900/30">
+                    <div className="w-full md:w-20 text-center font-black text-emerald-500 bg-emerald-900/20 py-3 rounded-xl border border-emerald-900/40">{role}</div>
+                    <input type="text" placeholder="플레이어 1" className="flex-1 w-full bg-transparent border border-slate-800 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 text-center md:text-left" value={lolPlayers[role][0]} onChange={(e) => setLolPlayers({...lolPlayers, [role]: [e.target.value, lolPlayers[role][1]]})} />
+                    <span className="text-slate-700 font-black italic hidden md:block">VS</span>
+                    <input type="text" placeholder="플레이어 2" className="flex-1 w-full bg-transparent border border-slate-800 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 text-center md:text-left" value={lolPlayers[role][1]} onChange={(e) => setLolPlayers({...lolPlayers, [role]: [lolPlayers[role][0], e.target.value]})} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-center mt-auto"><button onClick={handleShuffleTeams} className="w-full md:w-auto px-16 py-5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-[#050a08] font-black text-xl rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-transform">팀 섞기 🎲</button></div>
+            </div>
+          </div>
+        )}
+
+        {/* 💡 럭키 핀볼 (슬롯머신 방식) 탭 */}
+        {activeTab === 'pinball' && (
+          <div className="max-w-4xl mx-auto animate-fadeIn space-y-8">
+            <div className="bg-[#0a120e] border border-pink-900/50 rounded-3xl p-8 shadow-[0_0_40px_rgba(236,72,153,0.1)] relative overflow-hidden"><h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400 mb-2 text-center relative z-10">🎯 럭키 핀볼</h2>
+              <div className="flex flex-col md:flex-row gap-8 relative z-10 mt-10">
+                <div className="w-full md:w-1/3 flex flex-col gap-4">
+                  <textarea className="w-full h-40 md:h-full bg-[#050812] border border-pink-900/30 rounded-2xl p-4 text-pink-100 focus:outline-none focus:border-pink-500/50 resize-none font-bold" placeholder="치킨, 꽝, 만원" value={pbItems} onChange={(e) => setPbItems(e.target.value)} />
+                  <button onClick={handleStartPinball} disabled={pbRolling} className="w-full py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-black text-xl rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] disabled:opacity-50 transition-all">{pbRolling ? '추첨 중...' : '시작 🕹️'}</button>
+                </div>
+                <div className="w-full md:w-2/3 h-64 bg-[#050812] border-4 border-pink-900/30 rounded-3xl flex items-center justify-center relative shadow-inner overflow-hidden">
+                  {pbRolling ? (<div className="text-4xl md:text-5xl font-black text-pink-300 animate-pulse tracking-widest drop-shadow-[0_0_15px_rgba(236,72,153,0.8)]">{pbCurrent}</div>) : pbResult ? (<div className="flex flex-col items-center animate-bounce"><span className="text-pink-500 text-sm font-bold mb-2">당첨 결과</span><div className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-400 to-purple-400 drop-shadow-[0_0_20px_rgba(236,72,153,0.5)]">🎉 {pbResult} 🎉</div></div>) : (<div className="text-xl font-bold text-pink-900/50 tracking-widest">READY TO START</div>)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 💡 사다리 타기 탭 */}
+        {activeTab === 'ladder' && (
+          <div className="max-w-6xl mx-auto animate-fadeIn space-y-8">
+            <div className="bg-[#0a120e] border border-amber-900/50 rounded-3xl p-8 shadow-[0_0_40px_rgba(245,158,11,0.1)] relative overflow-hidden">
+              <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 mb-2 text-center">🪜 사다리 타기</h2>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 bg-[#050a08] p-4 rounded-2xl border border-amber-900/30 flex-wrap">
+                <div className="flex items-center gap-4">
+                  <span className="text-amber-500 font-bold">인원 수 ({ladderCols}명)</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setLadderCols(p => Math.max(2, p - 1))} className="w-10 h-10 rounded-full bg-amber-900/30 text-amber-400 hover:bg-amber-900/60 font-black text-xl flex items-center justify-center">-</button>
+                    <button onClick={() => setLadderCols(p => Math.min(20, p + 1))} className="w-10 h-10 rounded-full bg-amber-900/30 text-amber-400 hover:bg-amber-900/60 font-black text-xl flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 flex-wrap justify-center">
+                  <button onClick={generateLadder} className="px-6 py-2 bg-gradient-to-r from-amber-600 to-orange-500 text-[#050a08] font-black rounded-xl hover:from-amber-500 hover:to-orange-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    🎲 사다리 생성
+                  </button>
+                  <button onClick={handleShowAllLadderResults} className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 text-[#050a08] font-black rounded-xl hover:from-emerald-500 hover:to-teal-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    📊 전체결과
+                  </button>
+                  <button onClick={handleResetLadder} className="px-6 py-2 bg-slate-800 text-slate-300 font-black rounded-xl hover:bg-slate-700 transition-all border border-slate-700">
+                    🔄 초기화
+                  </button>
+                </div>
+              </div>
+
+              <div className="w-full overflow-x-auto pb-6 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-amber-900/50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-[#050a08]">
+                <div style={{ minWidth: ladderCols > 8 ? `${ladderCols * 80}px` : '100%' }} className="relative px-2">
+                  <div className="flex justify-between mb-4 relative z-10">{Array.from({length: ladderCols}).map((_, i) => (<div key={`p-${i}`} className="flex-1 px-1 flex justify-center"><div className="flex flex-col gap-2 w-full max-w-[90px]"><input type="text" className="w-full text-center text-xs md:text-sm font-bold bg-[#050812] border-2 border-amber-900/50 hover:border-amber-500/50 rounded-lg py-1.5 text-slate-200 focus:outline-none focus:border-amber-500" value={ladderPlayers[i] || ''} onChange={(e) => { const newP = [...ladderPlayers]; newP[i] = e.target.value; setLadderPlayers(newP); }} placeholder={`참가${i+1}`} /><button onClick={() => traceLadder(i)} className={`w-full py-1.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${ladderPath && ladderPath[0].x === i ? 'bg-amber-500 text-amber-950 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-amber-900/30 text-amber-500 hover:bg-amber-400 hover:text-amber-950 border border-amber-900/50'}`}>START</button></div></div>))}</div>
+                  <div className="relative h-[450px] w-full bg-[#050812] border border-amber-900/30 rounded-2xl overflow-hidden shadow-inner">{ladderLines.length === 0 ? (<div className="absolute inset-0 flex items-center justify-center text-amber-900/50 font-black text-2xl tracking-widest">생성 버튼을 눌러주세요</div>) : (<svg viewBox="0 0 1000 1000" className="w-full h-full" preserveAspectRatio="none">{Array.from({length: ladderCols}).map((_, c) => ( <line key={`v-${c}`} x1={getX(c)} y1={0} x2={getX(c)} y2={SVG_H} stroke="#451a03" strokeWidth="6" /> ))}{ladderLines.map((rowArr, r) => rowArr.map((hasLine, c) => hasLine && ( <line key={`h-${r}-${c}`} x1={getX(c)} y1={getY(r+1)} x2={getX(c+1)} y2={getY(r+1)} stroke="#451a03" strokeWidth="6" /> )) )}{ladderPath && (<polyline key={ladderAnimKey} points={ladderPath.map(p => `${getX(p.x)},${getY(p.y)}`).join(' ')} fill="none" stroke="#fbbf24" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 30000, strokeDashoffset: 30000, animation: 'drawLineAnimation 1.5s linear forwards' }} />)}</svg>)}</div>
+                  <div className="flex justify-between mt-4 relative z-10">{Array.from({length: ladderCols}).map((_, i) => (<div key={`r-${i}`} className="flex-1 px-1 flex justify-center"><input type="text" className={`w-full max-w-[90px] text-center text-xs md:text-sm font-bold bg-[#050a08] border-2 rounded-lg py-2 transition-all focus:outline-none focus:border-amber-500 ${ladderEndIdx === i ? 'border-red-500 text-red-400 bg-red-950/30 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-110' : 'border-amber-900/50 text-slate-400'}`} value={ladderResults[i] || ''} onChange={(e) => { const newR = [...ladderResults]; newR[i] = e.target.value; setLadderResults(newR); }} placeholder={`결과${i+1}`} /></div>))}</div>
+                </div>
+              </div>
+
+              {ladderAllResults && (
+                <div className="mt-8 bg-[#050a08] p-6 rounded-2xl border border-emerald-900/50 animate-fadeIn">
+                  <h3 className="text-xl font-black text-emerald-400 mb-4 text-center">📊 전체 사다리 결과</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {ladderAllResults.map((res, i) => (
+                      <div key={i} className="flex items-center justify-between bg-[#0a120e] p-3 rounded-xl border border-emerald-900/30">
+                        <span className="text-slate-300 font-bold truncate flex-1">{res.player}</span>
+                        <span className="text-slate-500 mx-2">➔</span>
+                        <span className="text-emerald-400 font-black shrink-0">{res.result}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
