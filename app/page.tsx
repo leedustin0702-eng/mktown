@@ -43,6 +43,8 @@ const getLatestSeason = (data: any[]) => {
 };
 
 export default function MKTOWNPage() {
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [notices, setNotices] = useState<any[]>([]); 
   
@@ -54,8 +56,6 @@ export default function MKTOWNPage() {
   const [currentBannerIdx, setCurrentBannerIdx] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [logoError, setLogoError] = useState<boolean>(false);
-
-  const scrollRef = useRef<HTMLDivElement>(null); 
 
   const [ppudcup, setPpudcup] = useState<any[]>([]);
   const [ppuchamps, setPpuchamps] = useState<any[]>([]);
@@ -77,18 +77,15 @@ export default function MKTOWNPage() {
   const [loadingText, setLoadingText] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
 
-  // 롤 내전 State
   const [lolPlayers, setLolPlayers] = useState<Record<string, string[]>>({ '탑': ['', ''], '정글': ['', ''], '미드': ['', ''], '원딜': ['', ''], '서포터': ['', ''] });
   const [blueTeam, setBlueTeam] = useState<Record<string, string> | null>(null);
   const [redTeam, setRedTeam] = useState<Record<string, string> | null>(null);
 
-  // 원래 방식 핀볼(룰렛) State
   const [pbItems, setPbItems] = useState<string>('치킨 쏘기, 커피 쏘기, 벌칙, 무효, 만원 기부');
   const [pbResult, setPbResult] = useState<string | null>(null);
   const [pbRolling, setPbRolling] = useState<boolean>(false);
   const [pbCurrent, setPbCurrent] = useState<string>('준비 완료!');
 
-  // 사다리 타기 State
   const LADDER_ROWS = 12;
   const [ladderCols, setLadderCols] = useState<number>(4);
   const initPlayers = Array.from({length: 20}, (_, i) => i < 8 ? `참가자${i+1}` : '');
@@ -127,53 +124,32 @@ export default function MKTOWNPage() {
         let rawTier = cols[3] || '티어 미정';
         if (!rawTier.includes('티어') && rawTier.trim() !== '') rawTier = rawTier + '티어';
         
-        const isLiveStr = cols[4] ? cols[4].toUpperCase() : '';
-        const categoryStr = cols[5] ? cols[5].toUpperCase() : ''; 
+        const isLiveStr = cols[4] ? cols[4].trim().toUpperCase() : '';
+        const isFcoStr = cols[5] ? cols[5].trim().toUpperCase() : '';
+        const soopTitle = cols[6] ? cols[6].trim() : 'FC 온라인 방송 중입니다';
+        const viewers = cols[7] ? parseInt(cols[7].replace(/[^0-9]/g, ''), 10) || 0 : 0;
+        const soopBno = cols[8] ? cols[8].trim() : ''; 
         
-        const isCurrentlyLive = isLiveStr === 'ON' || isLiveStr === 'O' || isLiveStr === 'TRUE' || isLiveStr.includes('FC') || categoryStr !== '';
-        const isFco = isCurrentlyLive && (isLiveStr.includes('FC') || categoryStr.includes('FC') || categoryStr.includes('피파'));
+        const isCurrentlyLive = isLiveStr === 'ON';
+        const isFco = isFcoStr === 'FCO';
+        const soopId = cols[1] || '아이디 없음';
 
         return {
-          id: index + 1, name: cols[0] || '이름 없음', soopId: cols[1] || '아이디 없음', 
-          fcoNickname: cols[2] || '구단주 미정', tier: rawTier, isLive: isCurrentlyLive, isFco: isFco, viewers: 0,
+          id: index + 1, 
+          name: cols[0] || '이름 없음', 
+          soopId: soopId, 
+          fcoNickname: cols[2] || '구단주 미정', 
+          tier: rawTier, 
+          isLive: isCurrentlyLive, 
+          isFco: isFco,
+          viewers: viewers,
+          soopTitle: soopTitle,
+          soopBno: soopBno,
+          soopThumbnail: soopBno ? `https://liveimg.afreecatv.com/h/${soopBno}.webp` : `https://liveimg.afreecatv.com/m/${soopId}?${Math.floor(Date.now() / 300000)}`
         };
       });
 
-      const liveBjids = baseStreamers.filter(s => s.isLive && s.soopId !== '아이디 없음').map(s => s.soopId);
-      let soopDataMap: Record<string, any> = {};
-
-      if (liveBjids.length > 0) {
-        try {
-          const soopRes = await fetch('/api/soop', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bjids: liveBjids })
-          });
-          if(soopRes.ok) {
-             const soopList = await soopRes.json();
-             soopList.forEach((info: any) => {
-               soopDataMap[info.bjid] = info;
-             });
-          }
-        } catch(e) { console.error("SOOP API 연동 에러:", e); }
-      }
-
-      const finalStreamers = baseStreamers.map(s => {
-        if (s.isLive && soopDataMap[s.soopId]) {
-          const info = soopDataMap[s.soopId];
-          return {
-            ...s,
-            isFco: info.isFco,
-            soopTitle: info.title,
-            viewers: info.viewers,
-            soopBno: info.bno,
-            soopThumbnail: info.thumbnail
-          };
-        }
-        return s;
-      });
-
-      setStreamers(finalStreamers);
+      setStreamers(baseStreamers);
 
       setPpudcup(parseCSV(await resCup.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
       setPpuchamps(parseCSV(await resChamps.text()).map(c => ({ season: c[0], name: c[1], team: c[2], rank: c[3] })));
@@ -209,7 +185,12 @@ export default function MKTOWNPage() {
       const m = String(now.getMinutes()).padStart(2, '0');
       setLastUpdateTime(`${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${ampm} ${h}:${m} 기준`);
 
-    } catch (error) { console.error('시트 로드 실패:', error); }
+      setIsInitialLoading(false);
+
+    } catch (error) { 
+      console.error('시트 로드 실패:', error); 
+      setIsInitialLoading(false); 
+    }
   }, []);
 
   useEffect(() => {
@@ -473,9 +454,6 @@ export default function MKTOWNPage() {
 
   const goHome = () => { setActiveTab('home'); setSearchResult(null); setNexonRank(null); setNexonBasic(null); setH2hData([]); setSearchInput(''); };
 
-  // ==========================================
-  // ⚔️ 롤 내전 함수
-  // ==========================================
   const handleShuffleTeams = () => {
     const blue: Record<string, string> = {}; const red: Record<string, string> = {};
     Object.keys(lolPlayers).forEach((role) => {
@@ -485,9 +463,6 @@ export default function MKTOWNPage() {
     setBlueTeam(blue); setRedTeam(red);
   };
 
-  // ==========================================
-  // 🎯 원래 핀볼 롤링 함수
-  // ==========================================
   const handleStartPinball = () => {
     const arr = pbItems.split(',').map(s => s.trim()).filter(Boolean);
     if(arr.length < 2) { alert('쉼표(,)로 구분해서 2개 이상 입력하세요!'); return; }
@@ -500,9 +475,6 @@ export default function MKTOWNPage() {
     roll();
   };
 
-  // ==========================================
-  // 🪜 사다리 타기 함수
-  // ==========================================
   const SVG_W = 1000; const SVG_H = 1000;
   const getX = (c: number) => (c + 0.5) * (SVG_W / ladderCols); const getY = (r: number) => r * (SVG_H / (LADDER_ROWS + 1));
   
@@ -595,6 +567,21 @@ export default function MKTOWNPage() {
     <main className="min-h-screen bg-[#050a08] text-slate-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30 relative">
       <style dangerouslySetInnerHTML={{ __html: `@keyframes drawLineAnimation { 0% { stroke-dashoffset: 30000; } 100% { stroke-dashoffset: 0; } }`}} />
 
+      {/* 💡 초기 전체 로딩 화면 (데이터 불러올 때만 등장) */}
+      {isInitialLoading && (
+        <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center bg-[#050a08] backdrop-blur-md">
+          <div className="relative w-24 h-24 mb-8">
+            <div className="absolute inset-0 border-4 border-emerald-900/30 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center text-3xl animate-pulse">⚽</div>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400 mb-2 animate-pulse drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">
+            데이터를 불러오는 중입니다...
+          </h1>
+          <p className="text-emerald-900/70 font-bold text-sm tracking-widest">잠시만 기다려주세요</p>
+        </div>
+      )}
+
       {selectedH2H && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#050a08]/90 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#0a120e] border border-emerald-500/50 rounded-3xl w-full max-w-lg p-6 md:p-8 shadow-[0_0_50px_rgba(16,185,129,0.3)] relative">
@@ -675,10 +662,7 @@ export default function MKTOWNPage() {
 
             <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
                
-               {/* 상단 타이틀과 우측 뱃지 영역 */}
                <div className="flex flex-col lg:flex-row justify-between items-start gap-4 mb-8">
-                 
-                 {/* 좌측 타이틀 영역 */}
                  <div>
                    <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">현재 방송중</p>
                    <div className="flex flex-wrap items-center gap-3">
@@ -688,7 +672,6 @@ export default function MKTOWNPage() {
                    </div>
                  </div>
 
-                 {/* 우측 상단 뱃지 및 안내 멘트 영역 */}
                  <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2 w-fit">
                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
@@ -705,8 +688,7 @@ export default function MKTOWNPage() {
                    {fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="flex flex-col bg-[#0a120e] rounded-2xl overflow-hidden transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50 h-full">
                        
-                       {/* 1. 썸네일 영역 (상단) */}
-                       <div className="relative aspect-video w-full bg-slate-900 overflow-hidden border-b border-slate-800/50">
+                       <div className="relative aspect-video w-full bg-[#050812] overflow-hidden border-b border-slate-800/50 flex items-center justify-center">
                          <img 
                             src={s.soopThumbnail || `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`} 
                             referrerPolicy="no-referrer"
@@ -718,18 +700,17 @@ export default function MKTOWNPage() {
                                 target.src = `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`;
                               } else if(target.dataset.failed === '1') {
                                 target.dataset.failed = '2';
-                                target.src = 'https://via.placeholder.com/400x225/050a08/334155?text=No+Signal';
+                                // 💡 외부 사이트 의존 없는 절대 안 깨지는 브라우저 자체 SVG!
+                                target.src = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%230a120e'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2310b981' font-family='sans-serif' font-size='16' font-weight='bold'%3E%ED%99%94%EB%A9%B4 %EC%A4%80%EB%B9%84 %EC%A4%91...%3C/text%3E%3C/svg%3E";
                               }
                             }} 
                          />
-                         {/* 좌측 상단 시청자 수 뱃지 */}
                          <div className="absolute top-2.5 left-2.5 bg-black/80 px-2.5 py-1 rounded-full text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md backdrop-blur-sm">
                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                            {s.viewers?.toLocaleString() || '0'}
                          </div>
                        </div>
                        
-                       {/* 2. 정보 영역 (하단) */}
                        <div className="p-4 flex gap-3 items-start bg-[#0a120e] flex-1">
                          <img src={s.soopId ? `https://stimg.afreecatv.com/LOGO/${s.soopId.substring(0, 2)}/${s.soopId}/${s.soopId}.jpg` : 'https://via.placeholder.com/150'} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full border border-slate-700 shrink-0 object-cover bg-slate-800" onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Img' }} />
                          
