@@ -656,29 +656,35 @@ export default function MKTOWNPage() {
                )}
             </div>
 
-            <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative">
+            <div className="bg-[#050a08] border border-slate-800 rounded-3xl p-6 md:p-8 relative min-h-[400px] flex flex-col">
                
-               <div className="flex flex-col lg:flex-row justify-between items-start gap-4 mb-8">
-                 <div>
-                   <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">현재 방송중</p>
-                   <div className="flex flex-wrap items-center gap-3">
-                     {/* 💡 텍스트 문구 'FC 온라인 LIVE' 복구 */}
-                     <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">FC 온라인 <span className="text-red-500 font-black">LIVE</span></h3>
-                     <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                     <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded">{fcoLiveStreamers.length}명 방송중</span>
+               {/* 💡 상단 헤더 컨테이너 */}
+               <div className="flex flex-col relative w-full mb-10 md:mb-12">
+                 
+                 {/* 완전한 정중앙으로 이동된 타이틀 */}
+                 <div className="w-full flex justify-center mt-2 md:mt-0">
+                   <div className="flex items-center gap-3">
+                     <h3 className="text-3xl md:text-4xl font-black tracking-tight text-emerald-500">
+                       FC 온라인 <span className="text-red-500 font-black ml-1">LIVE</span>
+                     </h3>
+                     <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
                    </div>
                  </div>
 
-                 <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
-                   {/* 💡 텍스트 문구 복구 */}
-                   <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit whitespace-nowrap text-left lg:text-right leading-relaxed">
+                 {/* 우측 상단 모서리로 이동된 뱃지 및 안내 문구 */}
+                 <div className="md:absolute top-0 right-0 flex flex-col items-center md:items-end gap-2 mt-6 md:mt-0">
+                   <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-3 py-1.5 rounded w-fit">
+                     {fcoLiveStreamers.length}명 방송중
+                   </span>
+                   <span className="text-slate-400 text-[10px] md:text-[11px] font-medium whitespace-nowrap">
                      스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
-                   </div>
+                   </span>
                  </div>
+
                </div>
 
                {fcoLiveStreamers.length > 0 ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pt-2">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pt-2 flex-1">
                    {fcoLiveStreamers.map(s => (
                      <a key={s.id} href={`https://play.sooplive.co.kr/${s.soopId}`} target="_blank" rel="noreferrer" className="flex flex-col bg-[#0a120e] rounded-2xl overflow-hidden transition-transform duration-300 hover:-translate-y-1 shadow-lg group border border-slate-800 hover:border-emerald-500/50 h-full">
                        
@@ -719,11 +725,12 @@ export default function MKTOWNPage() {
                    ))}
                  </div>
                ) : (
-                 <div className="w-full py-16 flex flex-col items-center justify-center bg-[#0a120e] rounded-2xl border border-dashed border-slate-700/50 mt-4">
+                 <div className="w-full py-16 flex flex-col items-center justify-center bg-[#0a120e] rounded-2xl border border-dashed border-slate-700/50 flex-1">
                    <span className="text-5xl mb-4 opacity-50 grayscale">📺</span>
                    <p className="text-slate-400 font-bold">현재 FC 온라인 카테고리 방송이 없습니다.</p>
                  </div>
                )}
+
             </div>
 
           </div>
@@ -854,6 +861,7 @@ export default function MKTOWNPage() {
           </div>
         )}
 
+        {/* 💡 콘텐츠 탭 */}
         {activeTab === 'tourney' && (
           <div className="animate-fadeIn space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -902,6 +910,7 @@ export default function MKTOWNPage() {
           </div>
         )}
 
+        {/* 💡 명단 탭 */}
         {activeTab === 'members' && (
           <section className="animate-fadeIn space-y-6">
             <div className="flex items-center justify-between mb-6">
@@ -932,6 +941,7 @@ export default function MKTOWNPage() {
           </section>
         )}
 
+        {/* 💡 랭킹 탭 */}
         {activeTab === 'ranking' && (
           <div className="space-y-10 animate-fadeIn">
             <div className="bg-[#0a120e] border border-emerald-900/50 rounded-2xl p-6 shadow-2xl relative overflow-visible">
