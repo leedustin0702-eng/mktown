@@ -51,7 +51,6 @@ export default function MKTOWNPage() {
   
   const [fcoBoardNotices, setFcoBoardNotices] = useState<string[]>([]);
   const [currentBoardIdx, setCurrentBoardIdx] = useState<number>(0);
-  const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
 
   const [banners, setBanners] = useState<string[]>([]);
   const [currentBannerIdx, setCurrentBannerIdx] = useState<number>(0);
@@ -180,13 +179,6 @@ export default function MKTOWNPage() {
       } else {
          setBanners(['DEFAULT_BANNER']);
       }
-
-      // 💡 원래의 클라이언트(접속자 기준) 시계로 원상 복구
-      const now = new Date();
-      const ampm = now.getHours() >= 12 ? '오후' : '오전';
-      const h = now.getHours() % 12 || 12;
-      const m = String(now.getMinutes()).padStart(2, '0');
-      setLastUpdateTime(`${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${ampm} ${h}:${m} 기준`);
 
       setIsInitialLoading(false);
 
@@ -678,10 +670,6 @@ export default function MKTOWNPage() {
                  </div>
 
                  <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
-                   <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-emerald-500 text-xs font-bold flex items-center gap-2 w-fit">
-                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
-                     5분마다 자동 갱신 · {lastUpdateTime}
-                   </div>
                    {/* 💡 텍스트 문구 복구 */}
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit whitespace-nowrap text-left lg:text-right leading-relaxed">
                      스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
@@ -696,17 +684,20 @@ export default function MKTOWNPage() {
                        
                        <div className="relative aspect-video w-full bg-[#050812] overflow-hidden border-b border-slate-800/50 flex items-center justify-center">
                          <img 
-                            src={s.soopThumbnail || `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`} 
+                            src={s.soopThumbnail || "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%23050812'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23334155' font-family='sans-serif' font-size='20' font-weight='bold'%3ENo Signal%3C/text%3E%3C/svg%3E"} 
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                             onError={(e) => { 
                               const target = e.currentTarget as HTMLImageElement;
-                              if(!target.dataset.failed) {
+                              // 💡 1단계 실패: 고화질(webp)이 없으면 -> '방송 번호(soopBno)'를 사용한 m/ 주소로 재시도
+                              if(!target.dataset.failed && s.soopBno) {
                                 target.dataset.failed = '1';
-                                target.src = `https://liveimg.afreecatv.com/m/${s.soopId}?${Math.floor(Date.now() / 300000)}`;
-                              } else if(target.dataset.failed === '1') {
+                                target.src = `https://liveimg.afreecatv.com/m/${s.soopBno}?${Math.floor(Date.now() / 300000)}`;
+                              } 
+                              // 💡 2단계 실패: 모바일 화질도 없거나 방송 번호가 아예 없으면 -> 자체 내장 No Signal 출력
+                              else if(target.dataset.failed === '1' || !s.soopBno) {
                                 target.dataset.failed = '2';
-                                target.src = 'https://via.placeholder.com/400x225/050a08/334155?text=No+Signal';
+                                target.src = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%23050812'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23334155' font-family='sans-serif' font-size='20' font-weight='bold'%3ENo Signal%3C/text%3E%3C/svg%3E";
                               }
                             }} 
                          />
@@ -722,11 +713,6 @@ export default function MKTOWNPage() {
                          <div className="flex flex-col overflow-hidden w-full">
                            <span className="font-bold text-slate-100 text-sm truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
                            <span className="text-slate-400 text-xs truncate mt-0.5">{s.soopTitle || 'FC 온라인 방송 중입니다'}</span>
-                           
-                           <div className="flex items-center gap-1.5 mt-2.5">
-                             <span className="bg-slate-800/80 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-medium border border-slate-700/50">한국어</span>
-                             <span className="bg-slate-800/80 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-medium border border-slate-700/50">FC 온라인</span>
-                           </div>
                          </div>
                        </div>
                      </a>
