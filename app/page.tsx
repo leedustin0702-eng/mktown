@@ -28,8 +28,8 @@ const DIVISIONS: Record<number, string> = {
   5000: "유망주 1부", 5100: "유망주 2부", 5200: "유망주 3부"
 };
 
-// isFco 속성 삭제
-interface Streamer { id: number; name: string; soopId: string; fcoNickname: string; tier: string; isLive: boolean; viewers: number; soopTitle?: string; soopBno?: string; soopThumbnail?: string; }
+// 💡 isFco 속성 부활
+interface Streamer { id: number; name: string; soopId: string; fcoNickname: string; tier: string; isLive: boolean; isFco: boolean; viewers: number; soopTitle?: string; soopBno?: string; soopThumbnail?: string; }
 interface MatchLog { date: string; result: string; myScore: number; oppScore: number; oppName: string; }
 interface H2HStat { streamer: Streamer; wins: number; draws: number; losses: number; recentMatches: MatchLog[]; }
 
@@ -125,13 +125,15 @@ export default function MKTOWNPage() {
         let rawTier = cols[3] || '티어 미정';
         if (!rawTier.includes('티어') && rawTier.trim() !== '') rawTier = rawTier + '티어';
         
-        // 💡 시트 구조 변경: E=ON여부, F=방송제목, G=시청자수, H=코드
+        // 💡 시트 구조 5칸 원상복구: E=ON, F=FCO, G=방제, H=시청자수, I=코드
         const isLiveStr = cols[4] ? cols[4].trim().toUpperCase() : '';
-        const soopTitle = cols[5] ? cols[5].trim() : '방송 중입니다';
-        const viewers = cols[6] ? parseInt(cols[6].replace(/[^0-9]/g, ''), 10) || 0 : 0;
-        const soopBno = cols[7] ? cols[7].trim() : ''; 
+        const isFcoStr = cols[5] ? cols[5].trim().toUpperCase() : '';
+        const soopTitle = cols[6] ? cols[6].trim() : 'FC 온라인 방송 중입니다';
+        const viewers = cols[7] ? parseInt(cols[7].replace(/[^0-9]/g, ''), 10) || 0 : 0;
+        const soopBno = cols[8] ? cols[8].trim() : ''; 
         
         const isCurrentlyLive = isLiveStr === 'ON';
+        const isFco = isFcoStr === 'FCO';
         const soopId = cols[1] || '아이디 없음';
 
         return {
@@ -141,6 +143,7 @@ export default function MKTOWNPage() {
           fcoNickname: cols[2] || '구단주 미정', 
           tier: rawTier, 
           isLive: isCurrentlyLive, 
+          isFco: isFco,
           viewers: viewers,
           soopTitle: soopTitle,
           soopBno: soopBno,
@@ -178,6 +181,7 @@ export default function MKTOWNPage() {
          setBanners(['DEFAULT_BANNER']);
       }
 
+      // 💡 원래의 클라이언트(접속자 기준) 시계로 원상 복구
       const now = new Date();
       const ampm = now.getHours() >= 12 ? '오후' : '오전';
       const h = now.getHours() % 12 || 12;
@@ -558,16 +562,16 @@ export default function MKTOWNPage() {
   const minkyoData = streamers.find(s => s.name === '김민교.');
   const isMinkyoLive = minkyoData?.isLive || false;
 
-  // 💡 [핵심] isFco 조건을 완전히 삭제하고 isLive(방송 켜짐)인 사람만 불러오도록 필터링 교체 완료!
+  // 💡 [핵심] isLive이고 isFco인 스트리머만 띄우도록 다시 필터 복구!
   const fcoLiveStreamers = useMemo(() => {
-    return [...streamers.filter(s => s.isLive)].sort(() => Math.random() - 0.5);
+    return [...streamers.filter(s => s.isLive && s.isFco)].sort(() => Math.random() - 0.5);
   }, [streamers]);
 
   return (
     <main className="min-h-screen bg-[#050a08] text-slate-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30 relative">
       <style dangerouslySetInnerHTML={{ __html: `@keyframes drawLineAnimation { 0% { stroke-dashoffset: 30000; } 100% { stroke-dashoffset: 0; } }`}} />
 
-      {/* 💡 초기 전체 로딩 화면 (데이터 불러올 때만 등장) */}
+      {/* 💡 초기 전체 로딩 화면 */}
       {isInitialLoading && (
         <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center bg-[#050a08] backdrop-blur-md">
           <div className="relative w-24 h-24 mb-8">
@@ -666,7 +670,8 @@ export default function MKTOWNPage() {
                  <div>
                    <p className="text-emerald-500 font-black tracking-widest text-xs mb-1">현재 방송중</p>
                    <div className="flex flex-wrap items-center gap-3">
-                     <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">스트리머 명단 <span className="text-red-500 font-black">LIVE</span></h3>
+                     {/* 💡 텍스트 문구 'FC 온라인 LIVE' 복구 */}
+                     <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">FC 온라인 <span className="text-red-500 font-black">LIVE</span></h3>
                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
                      <span className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded">{fcoLiveStreamers.length}명 방송중</span>
                    </div>
@@ -677,9 +682,9 @@ export default function MKTOWNPage() {
                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> 
                      5분마다 자동 갱신 · {lastUpdateTime}
                    </div>
-                   {/* 💡 텍스트 문구 '카테고리에서' 제외됨 */}
+                   {/* 💡 텍스트 문구 복구 */}
                    <div className="bg-[#050a08] border border-emerald-900/50 px-3 py-1.5 rounded text-slate-400 text-[11px] md:text-xs font-medium w-fit whitespace-nowrap text-left lg:text-right leading-relaxed">
-                     스트리머 명단에 있는 스트리머 중 방송 중인 스트리머가 표시됩니다.
+                     스트리머 명단에 있는 스트리머 중 FC 온라인 카테고리에서 방송 중인 스트리머가 표시됩니다.
                    </div>
                  </div>
                </div>
@@ -717,6 +722,11 @@ export default function MKTOWNPage() {
                          <div className="flex flex-col overflow-hidden w-full">
                            <span className="font-bold text-slate-100 text-sm truncate group-hover:text-emerald-400 transition-colors">{s.name}</span>
                            <span className="text-slate-400 text-xs truncate mt-0.5">{s.soopTitle || 'FC 온라인 방송 중입니다'}</span>
+                           
+                           <div className="flex items-center gap-1.5 mt-2.5">
+                             <span className="bg-slate-800/80 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-medium border border-slate-700/50">한국어</span>
+                             <span className="bg-slate-800/80 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-medium border border-slate-700/50">FC 온라인</span>
+                           </div>
                          </div>
                        </div>
                      </a>
@@ -725,7 +735,7 @@ export default function MKTOWNPage() {
                ) : (
                  <div className="w-full py-16 flex flex-col items-center justify-center bg-[#0a120e] rounded-2xl border border-dashed border-slate-700/50 mt-4">
                    <span className="text-5xl mb-4 opacity-50 grayscale">📺</span>
-                   <p className="text-slate-400 font-bold">현재 방송이 없습니다.</p>
+                   <p className="text-slate-400 font-bold">현재 FC 온라인 카테고리 방송이 없습니다.</p>
                  </div>
                )}
             </div>
